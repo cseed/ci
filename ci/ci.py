@@ -157,7 +157,7 @@ class Status(object):
         if self.state == 'merged':
             log.warning(
                 f'was notified of succeeding build for already merged PR! '
-                f'{self.pr_number}, {self.job_id}, {self.to_json()}')
+                f'{self.pr_number}, {self.job_id}, {self}')
             return self
         else:
             return self.copy(
@@ -171,7 +171,7 @@ class Status(object):
         if self.state == 'merged':
             log.error(
                 f'was notified of failing build for already merged PR! '
-                f'{self.pr_number}, {self.job_id}, {self.to_json()}')
+                f'{self.pr_number}, {self.job_id}, {self}')
             return self
         else:
             return self.copy(
@@ -195,6 +195,9 @@ class Status(object):
     def survived_a_gc(self):
         assert self.state == 'merged' and self.gc == 0, self.to_json()
         return self.copy(gc=self.gc+1)
+
+    def __str__(self):
+        return str(self.to_json())
 
     def to_json(self):
         return {
@@ -631,7 +634,7 @@ def heal():
         if auto_merge_on and len(ready_to_merge) != 0:
             # pick oldest one instead
             ((source_url, source_ref), status) = ready_to_merge[0]
-            log.info(f'merging {source_url}:{source_ref} into {target_url}:{target_ref} with status {status.to_json()}')
+            log.info(f'merging {source_url}:{source_ref} into {target_url}:{target_ref} with status {status}')
             pr_number = status.pr_number
             (gh_response, status_code) = put_repo(
                 repo_from_url(target_url),
@@ -645,12 +648,12 @@ def heal():
             if status_code == 200:
                 log.info(
                     f'successful merge of {source_url}:{source_ref} into '
-                    f'{target_url}:{target_ref} with status {status.to_json()}')
+                    f'{target_url}:{target_ref} with status {status}')
             else:
                 assert status_code == 409, f'{status_code} {gh_response}'
                 log.warning(
                     f'failure to merge {source_url}:{source_ref} into '
-                    f'{target_url}:{target_ref} with status {status.to_json()} '
+                    f'{target_url}:{target_ref} with status {status} '
                     f'due to {status_code} {gh_response}, removing PR, github '
                     f'state refresh will recover and retest if necessary')
             update_pr_status(
@@ -680,7 +683,7 @@ def heal():
                     log.info(
                         f'no approved and running prs, will build: '
                         f'{target_url}:{target_ref} <- {source_url}:{source_ref} '
-                        f'{status.to_json()}')
+                        f'{status}')
                     test_pr(source_url, source_ref, target_url, target_ref, status)
                 else:
                     untested = [(source, status)
@@ -692,7 +695,7 @@ def heal():
                             log.info(
                                 f'building: '
                                 f'{target_url}:{target_ref} <- {source_url}:{source_ref}'
-                                f'{status.to_json()}')
+                                f'{status}')
                             test_pr(source_url, source_ref, target_url, target_ref, status)
                     else:
                         log.info(f'all prs are tested or running for {target_url}:{target_ref}')
@@ -705,7 +708,7 @@ def gc():
                        for source, status in prs.items()
                        if status.state == 'merged' and status.gc > 0]
         if len(ready_to_gc) > 0:
-            ready_to_gc_message = [f'{source_url}:{source_ref} {status.to_json()}'
+            ready_to_gc_message = [f'{source_url}:{source_ref} {status}'
                                    for ((source_url, source_ref), status) in ready_to_gc]
             log.info(f'removing {len(ready_to_gc)} old merged PRs for {target_url}:{target_ref}: {ready_to_gc_message}')
             for ((source_url, source_ref), status) in ready_to_gc:
@@ -897,7 +900,7 @@ def refresh_github_state():
                                 job_id=job_id,
                                 docker_image=docker_image)
                             log.info(f'updating knowledge of {target_url}:{target_ref} <- {source_url}:{source_ref} '
-                                     f'to {new_status.to_json()} from {status.to_json() if status else status})')
+                                     f'to {new_status} from {status.to_json() if status else status})')
                             update_pr_status(
                                 source_url,
                                 source_ref,
@@ -914,7 +917,7 @@ def refresh_github_state():
                     log.info(f'some PRs have been invalidated by github state refresh: {known_prs_json}')
                     for (source_url, source_ref), status in known_prs.items():
                         if status.state == 'running':
-                            log.info(f'cancelling job {status.job_id} for {status.to_json()}')
+                            log.info(f'cancelling job {status.job_id} for {status}')
                             try_to_cancel_job_by_id(status.job_id)
         except Exception as e:
             log.exception(f'could not refresh state from {repo} due to {e}')
