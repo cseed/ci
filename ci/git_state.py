@@ -1,9 +1,13 @@
+from constants import *
+
 class Repo(object):
     def __init__(self, owner, name):
         assert isinstance(owner, str)
         assert isinstance(name, str)
         self.owner = owner
         self.name = name
+        self.url = f'{GITHUB_URL}{owner}/{name}.git'
+        self.qname = f'{owner}/{name}'
 
     def __eq__(self, other):
         return self.owner == other.owner and self.name == other.name
@@ -16,6 +20,10 @@ class Repo(object):
 
     def __str__(self):
         return str(self.to_json())
+
+    @staticmethod
+    def from_json(d):
+        return Repo(d['owner'], d['name'])
 
     def to_json(self):
         return {
@@ -45,6 +53,10 @@ class FQRef(object):
 
     def __str__(self):
         return str(self.to_json())
+
+    @staticmethod
+    def from_json(d):
+        return FQRef(Repo.from_json(d['repo']), d['ref'])
 
     def to_json(self):
         return {
@@ -76,6 +88,10 @@ class FQSHA(object):
 
     def __str__(self):
         return str(self.to_json())
+
+    @staticmethod
+    def from_json(d):
+        return FQSHA(FQRef.from_json(d['ref']), d['sha'])
 
     def to_json(self):
         return {
