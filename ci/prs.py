@@ -43,13 +43,6 @@ class PRS(object):
         if pr is not None:
             self._set(source, target, pr)
 
-    def _update_if_present(self, source, target, f):
-        pr = self._get(source, target, None)
-        if pr is not None:
-            pr = f(pr)
-            if pr is not None:
-                self._set(source, target, pr)
-
     def live_targets(self):
         return [x.ref for x in self.target_source_pr.keys()]
 
