@@ -18,6 +18,13 @@ def handle_invalid_usage(error):
     log.exception('bad status found when making request')
     return jsonify(error.data), error.status_code
 
+@app.route('/status')
+def status():
+    return {
+        'watched_repos': [x.to_json() for x in watched_repos],
+        'prs': to_json()
+    }
+
 @app.route('/push', methods=['POST'])
 def github_push():
     d = request.json
@@ -88,7 +95,7 @@ def refresh_batch_state():
                 if job2 is None:
                     latest_jobs[key] = job
                 else:
-                    if (job_ordering(job, job2) > 0)
+                    if (job_ordering(job, job2) > 0):
                         log.info(f'cancelling {job2.id}, preferring {job.id}, {job2.attributes} {job.attributes} ')
                         try_to_cancel_job(job2)
                         latest_jobs[key] = job

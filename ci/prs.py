@@ -43,6 +43,16 @@ class PRS(object):
         if pr is not None:
             self._set(source, target, pr)
 
+    def __str__(self):
+        return str(self.to_json())
+
+    def to_json(self):
+        return [
+            y
+            for x in target_source_pr.values()
+            for y in x.values()
+        ]
+
     def live_targets(self):
         return self.target_source_pr.keys()
 
