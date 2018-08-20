@@ -3,7 +3,7 @@ from build_state import *
 from ci_logging import log
 from constants import *
 from git_state import *
-from http import *
+from http_helper import *
 from sentinel import *
 
 def try_new_build(source, target):

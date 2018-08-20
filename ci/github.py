@@ -1,4 +1,4 @@
-from http import *
+from http_helper import *
 import re
 
 clone_url_to_repo = re.compile('https://github.com/([^/]+)/([^/]+).git')
