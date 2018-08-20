@@ -44,10 +44,35 @@ class PRS(object):
             self._set(source, target, pr)
 
     def live_targets(self):
+        return self.target_source_pr.keys()
+
+    def live_target_refs(self):
         return [x.ref for x in self.target_source_pr.keys()]
 
     def for_target(self, target):
         return [x for x in self.target_source_pr.get(target {}).values()]
+
+    def ready_to_merge(self, target):
+        return [
+            (source, pr)
+            for source, pr in self.for_target(target)
+            if pr.is_mergeable()
+        ]
+
+    def to_build_next(self, target):
+        approved = [
+            pr
+            for pr in self.for_target(target).values()
+            if pr.is_approved()
+        ]
+        running = [x for x in approved if x.is_running()]
+        if len(running) != 0:
+            return []
+        else:
+            if len(approved) != 0:
+                return approved
+            else:
+                return [x for x in approved if x.is_pending_build()]
 
     def push(self, new_target):
         assert isinstance(new_target, FQSHA)
@@ -74,6 +99,12 @@ class PRS(object):
 
     def forget(self, source, target):
         _pop(source, target)
+
+    def forget(self, pr):
+        x = _pop(pr.source.ref, pr.target.ref)
+        assert x, x
+        assert x.source.sha = pr.source.sha, pr
+        assert x.target.sha = pr.target.sha, pr
 
     def review(self, gh_pr, state):
         assert state in ['pending', 'approved', 'changes_requested']

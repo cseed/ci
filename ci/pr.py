@@ -6,7 +6,7 @@ from git_state import *
 from http import *
 from sentinel import *
 
-def try_new_build(target, source):
+def try_new_build(source, target):
     img = maybe_get_image(target, source)
     if img:
         attributes = {
@@ -58,16 +58,16 @@ def try_new_build(target, source):
     else:
         return NoImage()
 
-def determine_buildability(target, source):
-    img = maybe_get_image(target, source)
+def determine_buildability(source, target):
+    img = maybe_get_image(source, target)
     if img:
         return Buildable(img)
     else:
         return NoImage()
 
-def maybe_get_image(target, source):
-    assert isinstance(target, FQSHA)
+def maybe_get_image(source, target):
     assert isinstance(source, FQSHA)
+    assert isinstance(target, FQSHA)
     d = os.getcwd()
     try:
         trepo = target.ref.repo
@@ -191,20 +191,20 @@ class PR(object):
         )
 
     def _new_target(new_target):
-        img = maybe_build_image(source, new_target)
+        img = maybe_build_image(self.source, new_target)
         return self.copy(
             target=new_target
         )._new_build(
-            determine_buildability(new_source, new_target)
+            determine_buildability(self.source, new_target)
         )
 
     def _new_source(new_source):
-        img = maybe_build_image(new_source, new_target)
+        img = maybe_build_image(new_source, self.target)
         return self.copy(
-            target=new_target,
+            source=new_source
             review='pending'
         )._new_build(
-            try_new_build(new_source, new_target)
+            try_new_build(new_source, self.target)
         )
 
     def _new_build(new_build):
@@ -213,6 +213,13 @@ class PR(object):
         return self.copy(
             build=self.build.transition(new_build)
         )
+
+    def build():
+        assert (
+            isinstance(self.build, Buildable) or
+            isinstance(self.build, Failure)
+        )
+        _new_build(try_new_build(self.source, self.target))
 
     def notify_github(build):
         json = {
@@ -259,6 +266,21 @@ class PR(object):
             'number': self.number,
             'title': self.title
         }
+
+    def is_mergeable(self):
+        return (
+            isinstance(self.build, Deployable) and
+            self.review == 'approved'
+        )
+
+    def is_approved(self):
+        return self.review == 'approved'
+
+    def is_running(self):
+        return isinstance(self.build, Building)
+
+    def is_pending_build(self):
+        return isinstance(self.build, Buildable)
 
     def update_from_github_push(push):
         assert isinstance(push, FQSHA)

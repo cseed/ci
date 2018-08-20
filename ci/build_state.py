@@ -30,11 +30,11 @@ def build_state_from_gh_json(d):
         elif t == 'Deployable':
             return Deployable(t['merged_sha'], t['target_sha'])
         elif t == 'Failure':
-            return Failure(t['exit_code'], t['target_sha'])
+            return Failure(t['exit_code'], t['image'], t['target_sha'])
         elif t == 'NoMergeSHA':
             return NoMergeSHA(t['exit_code'], t['target_sha'])
         elif t == 'Building':
-            return Building(batch_client.get_job(t['job_id']), t['target_sha'])
+            return Building(batch_client.get_job(t['job_id']), t['image'], t['target_sha'])
         elif t == 'Buildable':
             return Buildable(t['image'], t['target_sha'])
         else:
@@ -86,7 +86,7 @@ class Deploying(object):
         self.target_sha = target_sha
 
     def deployed(self):
-        return Deployed(self.job_id, self.merged_sha)
+        return Deployed(self.job_id, self.merged_sha, self.target_sha)
 
     def transition(self, other):
         if isinstance(other, Deployed):
@@ -125,7 +125,7 @@ class Deployable(object):
         self.target_sha = target_sha
 
     def deploy(self, job_id):
-        return Deploying(job_id, self.merged_sha)
+        return Deploying(job_id, self.merged_sha, self.target_sha)
 
     def transition(self, other):
         if not isinstance(other, Deploying):
@@ -156,12 +156,13 @@ class Deployable(object):
         return not self == other
 
 class Failure(object):
-    def __init__(self, exit_code, target_sha):
+    def __init__(self, exit_code, image, target_sha):
         self.exit_code = exit_code
+        self.image = image
         self.target_sha = target_sha
 
     def retry(self, job):
-        return Building(job)
+        return Building(job, self.image, self.target_sha)
 
     def transition(self, other):
         return other
@@ -173,6 +174,7 @@ class Failure(object):
         return {
             'type': 'Failure',
             'exit_code': self.exit_code,
+            'image': self.image,
             'target_sha': self.target_sha
         }
 
@@ -183,6 +185,7 @@ class Failure(object):
         return (
             isinstance(other, Failure) and
             self.exit_code == other.exit_code and
+            self.image == other.image and
             self.target_sha == other.target_sha
         )
 
@@ -194,8 +197,8 @@ class NoMergeSHA(object):
         self.exit_code = exit_code
         self.target_sha = target_sha
 
-    def retry(self, job):
-        return Building(job)
+    def retry(self, job, image):
+        return Building(job, image, self.target_sha)
 
     def transition(self, other):
         return other
@@ -224,19 +227,20 @@ class NoMergeSHA(object):
         return not self == other
 
 class Building(object):
-    def __init__(self, job, target_sha):
+    def __init__(self, job, image, target_sha):
         assert isinstance(job, Job)
         self.job = job
+        self.image = image
         self.target_sha = target_sha
 
     def success(self, merged_sha):
-        return Deployable(merged_sha)
+        return Deployable(merged_sha, self.target_sha)
 
     def failure(self, exit_code):
-        return Failure(exit_code)
+        return Failure(exit_code, self.image, self.target_sha)
 
     def no_merge_sha(self, exit_code):
-        return NoMergeSHA(exit_code)
+        return NoMergeSHA(exit_code, self.target_sha)
 
     def transition(self, other):
         if (isinstance(other, Deploying) or
@@ -257,6 +261,7 @@ class Building(object):
         return {
             'type': 'Building',
             'job': self.job.id,
+            'image': self.image,
             'target_sha': self.target_sha
         }
 
@@ -267,6 +272,7 @@ class Building(object):
         return (
             isinstance(other, Building) and
             self.job.id == other.job.id and
+            self.image == other.image and
             self.target_sha == other.target_sha
         )
 
@@ -279,7 +285,7 @@ class Buildable(object):
         self.target_sha = target_sha
 
     def building(self, job_id):
-        return Building(job_id)
+        return Building(job_id, self.image, self.target_sha)
 
     def transition(self, other):
         if (not isinstance(other, Deployable) and

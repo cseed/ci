@@ -117,7 +117,7 @@ def refresh_github_state():
 
 def refresh_pulls(pulls_by_target):
     open_gh_target_refs = set([x.ref for x in pulls.keys()])
-    for dead_target_ref in set(prs.live_targets()) - open_gh_target_refs:
+    for dead_target_ref in set(prs.live_target_refs()) - open_gh_target_refs:
         forget_target(dead_target_ref)
     for (target, pulls) in pulls_by_target.items():
         for gh_pr in pulls:
@@ -153,6 +153,39 @@ def refresh_statuses(pulls_by_target):
                 gh_pr,
                 build_state_from_gh_json(statuses)
             )
+
+@app.route('/heal', methods=['POST'])
+def heal():
+    for target in prs.live_targets():
+        ready_to_merge = prs.ready_to_merge(target)
+        if len(ready_to_merge) != 0:
+            # FIXME: pick oldest one instead
+            pr = ready_to_merge[0]
+            log.info(f'merging {pr}')
+            (gh_response, status_code) = put_repo(
+                pr.target.ref.repo.qname,
+                f'pulls/{pr.number}/merge',
+                json={
+                    'merge_method': 'squash',
+                    'sha': pr.source.sha
+                },
+                status_code=[200, 409]
+            )
+            if status_code == 200:
+                log.info(f'successful merge of {pr}')
+            else:
+                assert status_code == 409, f'{status_code} {gh_response}'
+                log.warning(
+                    f'failure to merge {pr} due to {status_code} {gh_response}, '
+                    f'removing PR, github state refresh will recover and retest '
+                    f'if necessary')
+                prs.forget(pr.source.ref, pr.target.ref)
+            # FIXME: eagerly update statuses for all PRs targeting this branch
+        else:
+            prs = prs.to_build_next(target)
+            log.info('nothing to merge into {target}, will build {prs}')
+            for pr in prs:
+                pr.build()
 
 ###############################################################################
 
