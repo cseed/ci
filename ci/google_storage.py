@@ -24,7 +24,8 @@ def upload_public_gs_file_from_filename(bucket, target_path, filename):
 def create_public_gs_file(bucket, target_path, upload):
     bucket = gcs_client.bucket(bucket)
     f = bucket.blob(target_path)
-    f.metadata = {'Cache-Control': 'private, max-age=0, no-transform'}
+    # https://developers.google.com/web/fundamentals/performance/optimizing-content-efficiency/http-caching
+    f.metadata = {'Cache-Control': 'no-cache'}
     upload(f)
     f.acl.all().grant_read()
     f.acl.save()
