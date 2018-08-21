@@ -112,9 +112,9 @@ class PRS(object):
             pr = source
             assert isinstance(pr, GitHubPR) or isinstance(pr, PR)
             x = self._pop(pr.source.ref, pr.target.ref)
-            assert x, x
-            assert x.source.sha == pr.source.sha, pr
-            assert x.target.sha == pr.target.sha, pr
+            if x:
+                assert x.source.sha == pr.source.sha, f'{x} {pr}'
+                assert x.target.sha == pr.target.sha, f'{x} {pr}'
 
     def review(self, gh_pr, state):
         assert state in ['pending', 'approved', 'changes_requested']

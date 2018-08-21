@@ -5,12 +5,12 @@ import batch
 import json
 import os
 
-SELF_HOSTNAME = os.environ['SELF_HOSTNAME']
-BATCH_SERVER_URL = os.environ['BATCH_SERVER_URL']
+SELF_HOSTNAME = os.environ.get('SELF_HOSTNAME', 'http://set_the_SELF_HOSTNAME/')
+BATCH_SERVER_URL = os.environ.get('BATCH_SERVER_URL', 'http://set_the_BATCH_SERVER_URL/')
 REFRESH_INTERVAL_IN_SECONDS = int(os.environ.get('REFRESH_INTERVAL_IN_SECONDS', 5 * 60))
 
 try:
-    INITIAL_WATCHED_REPOS = json.loads(os.environ['WATCHED_REPOS'])
+    INITIAL_WATCHED_REPOS = json.loads(os.environ.get('WATCHED_REPOS', '[]'))
 except Exception as e:
     raise ValueError(
         'environment variable WATCHED_REPOS should be a json array of repos as '
