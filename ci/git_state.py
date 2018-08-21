@@ -44,20 +44,20 @@ class Repo(object):
         return Repo(d['owner']['login'], d['name'])
 
 class FQRef(object):
-    def __init__(self, repo, ref):
+    def __init__(self, repo, name):
         assert isinstance(repo, Repo)
-        assert isinstance(ref, str)
+        assert isinstance(name, str)
         self.repo = repo
-        self.ref = ref
+        self.name = name
 
     def __eq__(self, other):
-        return self.repo == other.repo and self.ref == other.ref
+        return self.repo == other.repo and self.name == other.name
 
     def __ne__(self, other):
         return not self == other
 
     def __hash__(self):
-        return hash((self.repo, self.ref))
+        return hash((self.repo, self.name))
 
     def __str__(self):
         return json.dumps(self.to_json())
@@ -66,13 +66,13 @@ class FQRef(object):
     def from_json(d):
         assert isinstance(d, dict), f'{type(d)} {d}'
         assert 'repo' in d, d
-        assert 'ref' in d, d
-        return FQRef(Repo.from_json(d['repo']), d['ref'])
+        assert 'name' in d, d
+        return FQRef(Repo.from_json(d['repo']), d['name'])
 
     def to_json(self):
         return {
             'repo': self.repo.to_json(),
-            'ref': self.ref
+            'name': self.name
         }
 
 class FQSHA(object):

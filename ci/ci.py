@@ -131,7 +131,7 @@ def refresh_github_state():
             pulls_by_target = collections.defaultdict(list)
             for pull in pulls:
                 gh_pr = GitHubPR.from_gh_json(pull)
-                pulls_by_target[gh_pr.target].append(gh_pr)
+                pulls_by_target[gh_pr.target.ref].append(gh_pr)
             refresh_pulls(pulls_by_target)
             refresh_reviews(pulls_by_target)
             # FIXME: I can't fit statuses in the messages
@@ -141,18 +141,18 @@ def refresh_github_state():
     return '', 200
 
 def refresh_pulls(pulls_by_target):
-    open_gh_target_refs = {x.ref for x in pulls_by_target.keys()}
+    open_gh_target_refs = {x for x in pulls_by_target.keys()}
     for dead_target_ref in set(prs.live_target_refs()) - open_gh_target_refs:
         prs.forget_target(dead_target_ref)
-    for (target, pulls) in pulls_by_target.items():
+    for (target_ref, pulls) in pulls_by_target.items():
         for gh_pr in pulls:
             prs.pr_push(gh_pr)
         dead_prs = (
-            {x.source.ref for x in prs.for_target(target)} -
+            {x.source.ref for x in prs.for_target(target_ref)} -
             {x.source.ref for x in pulls}
         )
         for source_ref in dead_prs:
-            prs.forget(source_ref, target.ref)
+            prs.forget(source_ref, target_ref)
     return pulls_by_target
 
 def refresh_reviews(pulls_by_target):

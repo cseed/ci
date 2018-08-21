@@ -46,10 +46,10 @@ def try_new_build(source, target):
                 ],
                 env={
                     'SOURCE_REPO_URL': source.ref.repo.url,
-                    'SOURCE_BRANCH': source.ref.ref,
+                    'SOURCE_BRANCH': source.ref.name,
                     'SOURCE_SHA': source.sha,
                     'TARGET_REPO_URL': target.ref.repo.url,
-                    'TARGET_BRANCH': target.ref.ref,
+                    'TARGET_BRANCH': target.ref.name,
                     'TARGET_SHA': target.sha
                 },
                 resources={

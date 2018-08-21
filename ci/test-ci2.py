@@ -1,4 +1,5 @@
 from git_state import *
+from pr import PR
 from subprocess import call, run
 import os
 import random
@@ -230,8 +231,8 @@ class TestCI(unittest.TestCase):
         status = ci_get('/status', status_code=200)
         assert 'prs' in status
         assert 'watched_repos' in status
-        prs = status['prs']
-        prs = [pr for pr in prs if pr['source_ref'] == source_ref]
+        prs = [PR.from_json(x) for x in status['prs']]
+        prs = [pr for pr in prs if pr.source.ref.name == source_ref]
         assert len(prs) == 1
         return prs[0]
 
@@ -283,8 +284,8 @@ class TestCI(unittest.TestCase):
             status = ci_get('/status', status_code=200)
             assert 'prs' in status
             assert 'watched_repos' in status
-            prs = status['prs']
-            prs = [pr for pr in prs if pr['source_ref'] == source_ref]
+            prs = [PR.from_json(x) for x in status['prs']]
+            prs = [pr for pr in prs if pr.source.ref.name == source_ref]
             assert len(prs) <= 1
             polls = polls + 1
         assert len(prs) == 1

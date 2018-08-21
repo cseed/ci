@@ -47,7 +47,7 @@ class PRS(object):
         return self.target_source_pr.keys()
 
     def live_target_refs(self):
-        return [x.ref for x in self.target_source_pr.keys()]
+        return [x for x in self.target_source_pr.keys()]
 
     def for_target(self, target):
         return self.target_source_pr.get(target, {}).values()
@@ -80,7 +80,7 @@ class PRS(object):
         assert isinstance(new_target, FQSHA), new_target
         prs = self._get(target=new_target.ref).values()
         if len(prs) == 0:
-            log.info(f'no PRs for {new_target}')
+            log.info(f'no PRs for target {new_target}')
         else:
             for pr in prs:
                 new_status = pr.update_from_github_push(new_target)
@@ -90,7 +90,7 @@ class PRS(object):
         assert isinstance(gh_pr, GitHubPR), gh_pr
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
-            log.warning(f'could not find pr for {gh_pr}')
+            log.warning(f'found new PR {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
                   gh_pr.target.ref,
@@ -120,7 +120,7 @@ class PRS(object):
         assert state in ['pending', 'approved', 'changes_requested']
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
-            log.warning(f'could not find pr for {gh_pr}')
+            log.warning(f'found new PR during review update {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
                   gh_pr.target.ref,
@@ -131,6 +131,7 @@ class PRS(object):
         pr = self._get(source.ref, target.ref)
         if pr is None:
             log.warning(f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}')
+            return
         self._set(source.ref,
                   target.ref,
                   pr.update_from_completed_batch_job(job))
@@ -148,7 +149,7 @@ class PRS(object):
     def refresh_from_github_build_status(self, gh_pr, status):
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
-            log.warning(f'could not find pr for {gh_pr}')
+            log.warning(f'found new PR during GitHub build status update {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
                   gh_pr.target.ref,
