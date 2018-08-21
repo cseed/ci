@@ -105,8 +105,8 @@ def maybe_get_image(source, target):
         run(['git', 'fetch', 'origin'], check=True)
         run(['git', 'fetch', srepo.qname], check=True)
         run(['git', 'checkout', target.sha], check=True)
-        run(['git', 'config', '--global', 'user.email', 'hail-ci-leader@example.com'], check=True)
-        run(['git', 'config', '--global', 'user.name', 'hail-ci-leader'], check=True)
+        run(['git', 'config', 'user.email', 'hail-ci-leader@example.com'], check=True)
+        run(['git', 'config', 'user.name', 'hail-ci-leader'], check=True)
         run(['git', 'merge', source.sha, '-m', 'foo'], check=True)
         # a force push that removes refs could fail us... not sure what we
         # should do in that case. maybe 500'ing is OK?
