@@ -7,6 +7,7 @@ from github import *
 from google_storage import *
 from pr import *
 from prs import *
+from real_constants import *
 import collections
 import requests
 import threading
@@ -44,12 +45,14 @@ def github_push():
 @app.route('/pull_request', methods=['POST'])
 def github_pull_request():
     d = request.json
+    assert 'action' in d, d
+    assert 'pull_request' in d, d
     action = d['action']
-    gh_pr = GitHubPR.from_gh_json(d)
+    gh_pr = GitHubPR.from_gh_json(d['pull_request'])
     if action in ('opened', 'synchronize'):
         prs.pr_push(gh_pr)
     elif action == 'closed':
-        prs.forget(gh_pr.source, gh_pr.target)
+        prs.forget(gh_pr)
     else:
         log.info(f'ignoring pull_request with action {action}')
     return '', 200
@@ -200,7 +203,7 @@ def heal():
                     f'failure to merge {pr} due to {status_code} {gh_response}, '
                     f'removing PR, github state refresh will recover and retest '
                     f'if necessary')
-                prs.forget(pr.source.ref, pr.target.ref)
+                prs.forget(pr)
             # FIXME: eagerly update statuses for all PRs targeting this branch
         else:
             to_build = prs.to_build_next(target)

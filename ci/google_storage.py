@@ -1,5 +1,5 @@
 from google.cloud import storage
-from constants import *
+from real_constants import *
 import os
 
 # this is a bit of a hack, but makes my development life easier

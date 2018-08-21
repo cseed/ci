@@ -1,4 +1,3 @@
-from constants import *
 import requests
 
 def try_to_cancel_job(job):

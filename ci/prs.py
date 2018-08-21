@@ -54,7 +54,7 @@ class PRS(object):
 
     def ready_to_merge(self, target):
         return [
-            (source, pr)
+            pr
             for pr in self.for_target(target)
             if pr.is_mergeable()
         ]
@@ -80,7 +80,7 @@ class PRS(object):
         assert isinstance(new_target, FQSHA), new_target
         prs = self._get(target=new_target.ref).values()
         if len(prs) == 0:
-            log.info('no PRs for {new_target}')
+            log.info(f'no PRs for {new_target}')
         else:
             for pr in prs:
                 new_status = pr.update_from_github_push(new_target)
@@ -97,26 +97,30 @@ class PRS(object):
                   pr.update_from_github_pr(gh_pr))
 
     def forget_target(self, target):
-        assert isinstance(target, FQRef), target
+        assert isinstance(target, FQRef), f'{type(target)} {target}'
         sources = self.target_source_pr.pop(target, {}).keys()
         for source in sources:
             x = self.source_target_pr[source]
             del x[target]
 
-    def forget(self, source, target):
-        _pop(source, target)
-
-    def forget(self, pr):
-        x = _pop(pr.source.ref, pr.target.ref)
-        assert x, x
-        assert x.source.sha == pr.source.sha, pr
-        assert x.target.sha == pr.target.sha, pr
+    def forget(self, source, target=None):
+        if target is not None:
+            assert isinstance(source, FQRef)
+            assert isinstance(target, FQRef)
+            self._pop(source, target)
+        else:
+            pr = source
+            assert isinstance(pr, GitHubPR) or isinstance(pr, PR)
+            x = self._pop(pr.source.ref, pr.target.ref)
+            assert x, x
+            assert x.source.sha == pr.source.sha, pr
+            assert x.target.sha == pr.target.sha, pr
 
     def review(self, gh_pr, state):
         assert state in ['pending', 'approved', 'changes_requested']
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
-            log.warning('could not find pr for {gh_pr}')
+            log.warning(f'could not find pr for {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
                   gh_pr.target.ref,
@@ -126,7 +130,7 @@ class PRS(object):
         assert isinstance(job, Job), job
         pr = self._get(source.ref, target.ref)
         if pr is None:
-            log.warning('ignoring job {job} for unknown {source} and {target}')
+            log.warning(f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}')
         self._set(source.ref,
                   target.ref,
                   pr.update_from_completed_batch_job(job))
@@ -135,7 +139,7 @@ class PRS(object):
         assert isinstance(job, Job), job
         pr = self._get(source.ref, target.ref)
         if pr is None:
-            log.warning('ignoring job {job} for unknown {source} and {target}')
+            log.warning(f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}')
             return
         self._set(source.ref,
                   target.ref,
@@ -144,7 +148,7 @@ class PRS(object):
     def refresh_from_github_build_status(self, gh_pr, status):
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
-            log.warning('could not find pr for {gh_pr}')
+            log.warning(f'could not find pr for {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
                   gh_pr.target.ref,
@@ -155,7 +159,7 @@ class PRS(object):
         assert isinstance(target, FQRef)
         pr = self._get(source, target)
         if pr is None:
-            raise ValueError('no such pr {source} {target}')
+            raise ValueError(f'no such pr {source} {target}')
         self._set(source, target, pr.build_it())
 
 

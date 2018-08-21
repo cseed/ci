@@ -2,6 +2,7 @@ from batch.client import *
 from batch_helper import *
 from ci_logging import *
 from constants import *
+from real_constants import *
 import json
 import re
 

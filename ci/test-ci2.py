@@ -1,10 +1,11 @@
-import subprocess
+from git_state import *
 from subprocess import call, run
 import os
-import time
 import random
 import requests
+import subprocess
 import tempfile
+import time
 import unittest
 
 CI_URL='http://localhost:5000'
@@ -296,7 +297,7 @@ class TestCI(unittest.TestCase):
             try:
                 status = ci_get('/status', status_code=200)
                 self.assertIn('watched_repos', status)
-                self.assertEqual(status['watched_repos'], ['hail-is/ci-test'])
+                self.assertEqual(status['watched_repos'], [{'name': 'ci-test', 'owner': 'hail-is'}])
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
@@ -317,17 +318,33 @@ class TestCI(unittest.TestCase):
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
                 assertDictHasKVs(pr, {
-                    'source_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_ref': 'master',
-                    'status': {
-                        'state': 'success',
-                        'review_state': 'pending',
-                        'source_sha': source_sha,
-                        'target_sha': target_sha,
-                        'pr_number': str(pr_number),
-                        'docker_image': 'google/cloud-sdk:alpine'
-                    }
+                    "target": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "ref": "master"
+                        },
+                        "sha": target_sha
+                    },
+                    "source": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "ref": "test_pull_request_trigger"
+                        },
+                        "sha": source_sha
+                    },
+                    "review": "pending",
+                    "build": {
+                        "type": "Deployable",
+                        "target_sha": target_sha
+                    },
+                    "number": pr_number,
+                    "title": pr_number
                 })
                 assert pr['status']['job_id'] is not None
             finally:
@@ -385,7 +402,7 @@ class TestCI(unittest.TestCase):
             try:
                 status = ci_get('/status', status_code=200)
                 assert 'watched_repos' in status
-                assert status['watched_repos'] == ['hail-is/ci-test']
+                assert status['watched_repos'] == [{'name': 'ci-test', 'owner': 'hail-is'}]
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
@@ -502,7 +519,7 @@ class TestCI(unittest.TestCase):
             try:
                 status = ci_get('/status', status_code=200)
                 self.assertIn('watched_repos', status)
-                self.assertEqual(status['watched_repos'], ['hail-is/ci-test'])
+                self.assertEqual(status['watched_repos'], [{'name': 'ci-test', 'owner': 'hail-is'}])
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')

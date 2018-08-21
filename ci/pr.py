@@ -4,6 +4,7 @@ from ci_logging import log
 from constants import *
 from git_state import *
 from http_helper import *
+from real_constants import *
 from sentinel import *
 from subprocess import run, CalledProcessError
 
@@ -133,6 +134,11 @@ class GitHubPR(object):
 
     @staticmethod
     def from_gh_json(d):
+        assert 'state' in d, d
+        assert 'number' in d, d
+        assert 'title' in d, d
+        assert 'head' in d, d
+        assert 'base' in d, d
         return GitHubPR(
             d['state'],
             str(d['number']),
@@ -359,10 +365,10 @@ class PR(object):
         if state == 'Complete':
             return self.update_from_completed_batch_job(job)
         elif state == 'Cancelled':
-            log.error(f'a job for me was cancelled {job} {self}')
+            log.error(f'a job for me was cancelled {job.id} {job.attributes} {self}')
             return self._new_build(try_new_build(self.target, self.source))
         else:
-            assert state == 'Created', f'{state} {job} {self}'
+            assert state == 'Created', f'{state} {job.id} {job.attributes} {self}'
             assert 'target' in job.attributes, job.attributes
             assert 'image' in job.attributes, job.attributes
             target = FQSHA.from_json(json.loads(job.attributes['target']))
@@ -386,8 +392,8 @@ class PR(object):
             return self
         if exit_code == 0:
             log.info(f'job finished success {job.id} {job.attributes} {self}')
-            return self._new_build(Deployable('NO SHAS YET'))
+            return self._new_build(Deployable('NO SHAS YET', self.target.sha))
         else:
             log.info(f'job finished failure {job.id} {job.attributes} {self}')
-            return self._new_build(Failure(exit_code, job.attributes['image'], job_target.sha))
+            return self._new_build(Failure(exit_code, job.attributes['image'], self.target.sha))
 

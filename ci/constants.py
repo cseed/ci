@@ -1,19 +1,12 @@
+from real_constants import *
 from batch.client import *
 from ci_logging import *
 import batch
 import json
 import os
 
-GITHUB_API_URL = 'https://api.github.com/'
-GITHUB_CLONE_URL = 'https://github.com/'
-VERSION = '0-1'
-CONTEXT = 'hail-ci-0-1'
-BUILD_JOB_PREFIX = 'hail-ci-0-2'
-BUILD_JOB_TYPE = BUILD_JOB_PREFIX + '-build'
 SELF_HOSTNAME = os.environ['SELF_HOSTNAME']
 BATCH_SERVER_URL = os.environ['BATCH_SERVER_URL']
-GCP_PROJECT = 'broad-ctsa'
-GCS_BUCKET = 'hail-ci-' + VERSION
 REFRESH_INTERVAL_IN_SECONDS = int(os.environ.get('REFRESH_INTERVAL_IN_SECONDS', 5 * 60))
 
 try:

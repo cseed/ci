@@ -1,4 +1,5 @@
-from constants import *
+from real_constants import *
+import json
 
 class Repo(object):
     def __init__(self, owner, name):
