@@ -6,7 +6,7 @@ class Repo(object):
         assert isinstance(name, str)
         self.owner = owner
         self.name = name
-        self.url = f'{GITHUB_URL}{owner}/{name}.git'
+        self.url = f'{GITHUB_CLONE_URL}{owner}/{name}.git'
         self.qname = f'{owner}/{name}'
 
     def __eq__(self, other):
