@@ -71,7 +71,7 @@ class PRS(object):
         else:
             approved_and_need_status = [x for x in approved if x.is_pending_build()]
             if len(approved_and_need_status) != 0:
-                return [approved_and_need_status[0]]
+                return [approved_and_need_status[-1]]
             else:
                 all_pending_prs = [x for x in self.for_target(target) if x.is_pending_build()]
                 return all_pending_prs

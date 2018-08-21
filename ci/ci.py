@@ -181,8 +181,7 @@ def heal():
     for target in prs.live_targets():
         ready_to_merge = prs.ready_to_merge(target)
         if len(ready_to_merge) != 0:
-            # FIXME: pick oldest one instead
-            pr = ready_to_merge[0]
+            pr = ready_to_merge[-1]
             log.info(f'merging {pr}')
             (gh_response, status_code) = put_repo(
                 pr.target.ref.repo.qname,
