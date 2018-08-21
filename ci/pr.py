@@ -305,7 +305,7 @@ class PR(object):
             FQSHA.from_json(d['target']),
             FQSHA.from_json(d['source']),
             d['review'],
-            build_state_from_json(d['state']),
+            build_state_from_json(d['build']),
             d['number'],
             d['title'],
         )

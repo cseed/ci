@@ -29,7 +29,7 @@ def build_state_from_gh_json(d):
         return Unknown()
 
 def build_state_from_json(d):
-    t = doc['type']
+    t = d['type']
     if t == 'Deployed':
         return Deployed(doc['job_id'], doc['merged_sha'], doc['target_sha'])
     elif t == 'Deploying':
