@@ -1,3 +1,4 @@
+from constants import *
 import requests
 
 def try_to_cancel_job(job):
@@ -8,8 +9,8 @@ def try_to_cancel_job(job):
 
 # job_ordering(x, y) > 0 if x is closer to finishing or has a larger id
 def job_ordering(job1, job2):
-    x = job1._cached_status()['state']
-    y = job2._cached_status()['state']
+    x = job1.cached_status()['state']
+    y = job2.cached_status()['state']
     if x == 'Complete':
         if y == 'Complete':
             return job1.id - job2.id
@@ -19,7 +20,7 @@ def job_ordering(job1, job2):
         if y == 'Cancelled':
             return job1.id - job2.id
         else:
-            assert y == 'Created' or y == 'Complete', y
+            assert y in ('Created', 'Complete'), y
             return -1
     else:
         assert x == 'Created', x

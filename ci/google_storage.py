@@ -1,4 +1,6 @@
 from google.cloud import storage
+from constants import *
+import os
 
 # this is a bit of a hack, but makes my development life easier
 if 'GOOGLE_APPLICATION_CREDENTIALS' not in os.environ:

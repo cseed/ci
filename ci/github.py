@@ -15,7 +15,7 @@ def url_from_repo(repo):
     return f'https://github.com/{repo}.git'
 
 def open_pulls(target_repo):
-    return get_repo(target_repo.url, 'pulls?state=open', status_code=200)
+    return get_repo(target_repo.qname, 'pulls?state=open', status_code=200)
 
 def overall_review_state(reviews):
     latest_state_by_login = {}

@@ -1,3 +1,4 @@
+from constants import *
 import re
 import requests
 
@@ -57,6 +58,9 @@ def verb_repo(verb,
         data=data,
         status_code=status_code)
 
+def implies(antecedent, consequent):
+    return not antecedent or consequent
+
 verbs = set(['post', 'put', 'get'])
 def verb_github(verb,
                 url,
@@ -115,7 +119,7 @@ def verb_github(verb,
         else:
             return output
 
-github_link = re.compile('\s*<(http.+page=[0-9]+)>; rel="([A-z]+)"\s*')
+github_link = re.compile(r'\s*<(http.+page=[0-9]+)>; rel="([A-z]+)"\s*')
 def github_link_header_to_maybe_next(link):
     # I cannot find rigorous documentation on the format, but this seems to
     # work?

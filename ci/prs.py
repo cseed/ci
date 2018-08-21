@@ -1,4 +1,5 @@
 from pr import *
+import json
 
 class PRS(object):
     def __init__(self):
@@ -8,10 +9,10 @@ class PRS(object):
     def _set(self, source, target, status):
         assert isinstance(source, FQRef)
         assert isinstance(target, FQRef)
-        if x not in self.target_source_pr:
-            self.target_source_pr[x] = {}
-        if x not in self.source_target_pr:
-            self.source_target_pr[x] = {}
+        if target not in self.target_source_pr:
+            self.target_source_pr[target] = {}
+        if source not in self.source_target_pr:
+            self.source_target_pr[source] = {}
         self.target_source_pr[target][source] = status
         self.source_target_pr[source][target] = status
 
@@ -32,24 +33,13 @@ class PRS(object):
         self.target_source_pr[target].pop(source, None)
         return self.source_target_pr[source].pop(target, None)
 
-    def _update(self, source, target, f):
-        pr = self._get(source,
-                       target,
-                       PR.bottom(gh_pr.source,
-                                 gh_pr.target,
-                                 gh_pr.number,
-                                 gh_pr.title))
-        pr = f(pr)
-        if pr is not None:
-            self._set(source, target, pr)
-
     def __str__(self):
-        return str(self.to_json())
+        return json.dumps(self.to_json())
 
     def to_json(self):
         return [
-            y
-            for x in target_source_pr.values()
+            y.to_json()
+            for x in self.target_source_pr.values()
             for y in x.values()
         ]
 
@@ -60,32 +50,34 @@ class PRS(object):
         return [x.ref for x in self.target_source_pr.keys()]
 
     def for_target(self, target):
-        return [x for x in self.target_source_pr.get(target {}).values()]
+        return self.target_source_pr.get(target, {}).values()
 
     def ready_to_merge(self, target):
         return [
             (source, pr)
-            for source, pr in self.for_target(target)
+            for pr in self.for_target(target)
             if pr.is_mergeable()
         ]
 
     def to_build_next(self, target):
         approved = [
             pr
-            for pr in self.for_target(target).values()
+            for pr in self.for_target(target)
             if pr.is_approved()
         ]
         running = [x for x in approved if x.is_running()]
         if len(running) != 0:
             return []
         else:
-            if len(approved) != 0:
-                return approved
+            approved_and_need_status = [x for x in approved if x.is_pending_build()]
+            if len(approved_and_need_status) != 0:
+                return [approved_and_need_status[0]]
             else:
-                return [x for x in approved if x.is_pending_build()]
+                all_pending_prs = [x for x in self.for_target(target) if x.is_pending_build()]
+                return all_pending_prs
 
     def push(self, new_target):
-        assert isinstance(new_target, FQSHA)
+        assert isinstance(new_target, FQSHA), new_target
         prs = self._get(target=new_target.ref).values()
         if len(prs) == 0:
             log.info('no PRs for {new_target}')
@@ -95,13 +87,17 @@ class PRS(object):
                 self._set(pr.source.ref, pr.target.ref, new_status)
 
     def pr_push(self, gh_pr):
-        assert isinstance(gh_pr, GitHubPR)
-        self._update(gh_pr.source,
-                     gh_pr.target,
-                     lambda pr: pr.update_from_github_pr(gh_pr))
+        assert isinstance(gh_pr, GitHubPR), gh_pr
+        pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
+        if pr is None:
+            log.warning(f'could not find pr for {gh_pr}')
+            pr = gh_pr.to_PR()
+        self._set(gh_pr.source.ref,
+                  gh_pr.target.ref,
+                  pr.update_from_github_pr(gh_pr))
 
     def forget_target(self, target):
-        assert isinstance(target, FQRef)
+        assert isinstance(target, FQRef), target
         sources = self.target_source_pr.pop(target, {}).keys()
         for source in sources:
             x = self.source_target_pr[source]
@@ -113,24 +109,53 @@ class PRS(object):
     def forget(self, pr):
         x = _pop(pr.source.ref, pr.target.ref)
         assert x, x
-        assert x.source.sha = pr.source.sha, pr
-        assert x.target.sha = pr.target.sha, pr
+        assert x.source.sha == pr.source.sha, pr
+        assert x.target.sha == pr.target.sha, pr
 
     def review(self, gh_pr, state):
         assert state in ['pending', 'approved', 'changes_requested']
-        self._update(gh_pr.source,
-                     gh_pr.target,
-                     lambda pr: pr.update_from_github_review_state(state))
+        pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
+        if pr is None:
+            log.warning('could not find pr for {gh_pr}')
+            pr = gh_pr.to_PR()
+        self._set(gh_pr.source.ref,
+                  gh_pr.target.ref,
+                  pr.update_from_github_review_state(state))
 
     def build_finished(self, source, target, job):
         assert isinstance(job, Job), job
-        self._update(source, target, lambda pr: pr.update_from_completed_batch_job(job))
+        pr = self._get(source.ref, target.ref)
+        if pr is None:
+            log.warning('ignoring job {job} for unknown {source} and {target}')
+        self._set(source.ref,
+                  target.ref,
+                  pr.update_from_completed_batch_job(job))
 
     def refresh_from_job(self, source, target, job):
         assert isinstance(job, Job), job
-        self._update(source, target, lambda pr: pr.refresh_from_batch_job(job))
+        pr = self._get(source.ref, target.ref)
+        if pr is None:
+            log.warning('ignoring job {job} for unknown {source} and {target}')
+            return
+        self._set(source.ref,
+                  target.ref,
+                  pr.refresh_from_batch_job(job))
 
     def refresh_from_github_build_status(self, gh_pr, status):
-        self._update(gh_pr.source,
-                     gh_pr.target,
-                     lambda pr: pr.update_from_github_status(status))
+        pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
+        if pr is None:
+            log.warning('could not find pr for {gh_pr}')
+            pr = gh_pr.to_PR()
+        self._set(gh_pr.source.ref,
+                  gh_pr.target.ref,
+                  pr.update_from_github_status(status))
+
+    def build(self, source, target):
+        assert isinstance(source, FQRef)
+        assert isinstance(target, FQRef)
+        pr = self._get(source, target)
+        if pr is None:
+            raise ValueError('no such pr {source} {target}')
+        self._set(source, target, pr.build_it())
+
+

@@ -2,7 +2,7 @@ import logging
 
 log = logging.getLogger('ci')
 log.setLevel(logging.INFO)
-fmt = logging.Formatter('%(levelname)s:%(asctime)s:%(funcName)s:%(lineno)d: %(message)s')
+fmt = logging.Formatter('%(levelname)s:%(asctime)s:%(filename)s:%(funcName)s:%(lineno)d: %(message)s')
 
 fh = logging.FileHandler('ci.log')
 fh.setLevel(logging.INFO)
