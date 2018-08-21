@@ -288,10 +288,27 @@ class PR(object):
             'pending',
             Unknown(),
             number,
-            number)
+            title)
 
     def __str__(self):
         return json.dumps(self.to_json())
+
+    @staticmethod
+    def from_json(d):
+        assert 'target' in d, d
+        assert 'source' in d, d
+        assert 'review' in d, d
+        assert 'build' in d, d
+        assert 'number' in d, d
+        assert 'title' in d, d
+        return PR(
+            FQSHA.from_json(d['target']),
+            FQSHA.from_json(d['source']),
+            d['review'],
+            build_state_from_json(d['state']),
+            d['number'],
+            d['title'],
+        )
 
     def to_json(self):
         return {
