@@ -392,7 +392,7 @@ class PR(object):
                 return self.copy(build=build)
             else:
                 log.info('ignoring github build state for wrong target. '
-                         f'{target_sha} {build} {self}')
+                         f'{build} {self}')
                 return self
         else:
             log.info(f'ignoring github build state. {build} {self}')
@@ -428,12 +428,14 @@ class PR(object):
 
         if job_target.sha != self.target.sha:
             log.info(
-                f'notified of job for old target {job.id} {job.attributes} {self}'
+                f'notified of job for old target {job.id}'
+                # too noisy: f' {job.attributes} {self}'
             )
             return self
         if job_source.sha != self.source.sha:
             log.info(
-                f'notified of job for old source {job.id} {job.attributes} {self}'
+                f'notified of job for old source {job.id}'
+                # too noisy: f' {job.attributes} {self}'
             )
             return self
         if exit_code == 0:

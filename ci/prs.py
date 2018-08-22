@@ -161,15 +161,23 @@ class PRS(object):
         # eagerly heal because a finished job might mean new work to do
         self.heal_target(target.ref)
 
-    def refresh_from_job(self, source, target, job):
+    def refresh_from_job(self,
+                         source_ref,
+                         target_ref,
+                         source_sha,
+                         target_sha,
+                         job):
         assert isinstance(job, Job), job
-        pr = self._get(source.ref, target.ref)
+        pr = self._get(source_ref, target_ref)
         if pr is None:
             log.warning(
                 f'ignoring job {job.id} for unknown source and target'
             )
             return
-        self._set(source.ref, target.ref, pr.refresh_from_batch_job(job))
+        if pr.source.sha == source_sha and pr.target.sha == target_sha:
+            self._set(source_ref, target_ref, pr.refresh_from_batch_job(job))
+        else:
+            log.info(f'ignoring job {job.id} for unknown SHAs')
 
     def refresh_from_github_build_status(self, gh_pr, status):
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)

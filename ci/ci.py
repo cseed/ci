@@ -128,24 +128,24 @@ def refresh_batch_state():
             target = FQSHA.from_json(json.loads(attributes['target']))
             if target.ref.repo in watched_repos:
                 source = FQSHA.from_json(json.loads(attributes['source']))
-                key = (source, target)
-                job2 = latest_jobs.get(key, None)
+                key = (source.ref, target.ref)
+                _, _, job2 = latest_jobs.get(key, (None, None, None))
                 if job2 is None:
-                    latest_jobs[key] = job
+                    latest_jobs[key] = (source.sha, target.sha, job)
                 else:
                     if job_ordering(job, job2) > 0:
                         log.info(
                             f'cancelling {job2.id}, preferring {job.id}'
                         )
                         try_to_cancel_job(job2)
-                        latest_jobs[key] = job
+                        latest_jobs[key] = (source.sha, target.sha, job)
                     else:
                         log.info(
                             f'cancelling {job.id}, preferring {job2.id}'
                         )
                         try_to_cancel_job(job)
-    for ((source, target), job) in latest_jobs.items():
-        prs.refresh_from_job(source, target, job)
+    for ((source_ref, target_ref), (source_sha, target_sha, job)) in latest_jobs.items():
+        prs.refresh_from_job(source_ref, target_ref, source_sha, target_sha, job)
     return '', 200
 
 

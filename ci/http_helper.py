@@ -1,5 +1,5 @@
-from constants import *
-from real_constants import *
+from constants import oauth_token
+from real_constants import GITHUB_API_URL
 import re
 import requests
 
@@ -9,6 +9,17 @@ class BadStatus(Exception):
         Exception.__init__(self, str(data))
         self.data = data
         self.status_code = status_code
+
+
+def patch_repo(repo, url, headers=None, json=None, data=None, status_code=None):
+    return verb_repo(
+        'patch',
+        repo,
+        url,
+        headers=headers,
+        json=json,
+        data=data,
+        status_code=status_code)
 
 
 def post_repo(repo, url, headers=None, json=None, data=None, status_code=None):
@@ -22,13 +33,14 @@ def post_repo(repo, url, headers=None, json=None, data=None, status_code=None):
         status_code=status_code)
 
 
-def get_repo(repo, url, headers=None, status_code=None):
+def get_repo(repo, url, headers=None, status_code=None, json_response=True):
     return verb_repo(
         'get',
         repo,
         url,
         headers=headers,
-        status_code=status_code)
+        status_code=status_code,
+        json_response=json_response)
 
 
 def put_repo(repo, url, headers=None, json=None, data=None, status_code=None):
@@ -52,14 +64,16 @@ def verb_repo(verb,
               headers=None,
               json=None,
               data=None,
-              status_code=None):
+              status_code=None,
+              json_response=False):
     return verb_github(
         verb,
         f'repos/{repo}/{url}',
         headers=headers,
         json=json,
         data=data,
-        status_code=status_code)
+        status_code=status_code,
+        json_response=False)
 
 
 def implies(antecedent, consequent):
@@ -74,7 +88,8 @@ def verb_github(verb,
                 headers=None,
                 json=None,
                 data=None,
-                status_code=None):
+                status_code=None,
+                json_response=False):
     if isinstance(status_code, int):
         status_codes = [status_code]
     else:
@@ -83,6 +98,7 @@ def verb_github(verb,
     assert implies(verb == 'post' or verb == 'put',
                    json is not None or data is not None)
     assert implies(verb == 'get', json is None and data is None)
+    assert implies(json_response == True, verb == 'get'), f'{json_response} {verb}'
     if headers is None:
         headers = {}
     if 'Authorization' in headers:
@@ -91,16 +107,19 @@ def verb_github(verb,
     full_url = f'{GITHUB_API_URL}{url}'
     if verb == 'get':
         r = requests.get(full_url, headers=headers, timeout=5)
-        output = r.json()
-        if 'Link' in r.headers:
-            assert isinstance(output, list), output
-            link = r.headers['Link']
-            url = github_link_header_to_maybe_next(link)
-            while url is not None:
-                r = requests.get(url, headers=headers, timeout=5)
+        if json_response:
+            output = r.json()
+            if 'Link' in r.headers:
+                assert isinstance(output, list), output
                 link = r.headers['Link']
-                output.extend(r.json())
                 url = github_link_header_to_maybe_next(link)
+                while url is not None:
+                    r = requests.get(url, headers=headers, timeout=5)
+                    link = r.headers['Link']
+                    output.extend(r.json())
+                    url = github_link_header_to_maybe_next(link)
+        else:
+            output = r.text
     elif verb == 'post':
         r = requests.post(
             full_url,

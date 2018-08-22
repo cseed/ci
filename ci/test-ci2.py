@@ -1,6 +1,6 @@
+from http_helper import get_repo, post_repo, patch_repo
 from pr import PR
 from subprocess import call, run
-import json
 import os
 import requests
 import subprocess
@@ -37,21 +37,6 @@ oauth_tokens['user1'] = read_oauth_token_or_fail('github-tokens/user1')
 oauth_tokens['user2'] = read_oauth_token_or_fail('github-tokens/user2')
 
 
-def ci_post(endpoint, json=None, status_code=None, json_response=True):
-    r = requests.post(CI_URL + endpoint, json=json)
-    if status_code and r.status_code != status_code:
-        raise ValueError(
-            'bad status_code from pull_request: {status_code}\n{message}'.
-            format(
-                endpoint=endpoint,
-                status_code=r.status_code,
-                message=r.text))
-    if json_response:
-        return r.json()
-    else:
-        return r.text
-
-
 def ci_get(endpoint, status_code=None, json_response=True):
     r = requests.get(CI_URL + endpoint)
     if status_code and r.status_code != status_code:
@@ -61,130 +46,6 @@ def ci_get(endpoint, status_code=None, json_response=True):
                 status_code=r.status_code,
                 message=r.text))
     if json_response:
-        return r.json()
-    else:
-        return r.text
-
-
-def post_repo(repo,
-              url,
-              headers=None,
-              json=None,
-              data=None,
-              status_code=None,
-              user='user1',
-              json_response=True):
-    return modify_repo(
-        'post',
-        repo,
-        url,
-        headers,
-        json,
-        data,
-        status_code,
-        user=user,
-        json_response=json_response)
-
-
-def patch_repo(repo,
-               url,
-               headers=None,
-               json=None,
-               data=None,
-               status_code=None,
-               user='user1',
-               json_response=True):
-    return modify_repo(
-        'patch',
-        repo,
-        url,
-        headers,
-        json,
-        data,
-        status_code,
-        user=user,
-        json_response=json_response)
-
-
-def modify_repo(verb,
-                repo,
-                url,
-                headers=None,
-                json=None,
-                data=None,
-                status_code=None,
-                user='user1',
-                json_response=True):
-    if headers is None:
-        headers = {}
-    if 'Authorization' in headers:
-        raise ValueError('Header already has Authorization? ' + str(headers))
-    headers['Authorization'] = 'token ' + oauth_tokens[user]
-    if verb == 'post':
-        r = requests.post(
-            f'{GITHUB_URL}repos/{repo}/{url}',
-            headers=headers,
-            json=json,
-            data=data)
-    else:
-        assert verb == 'patch', verb
-        r = requests.patch(
-            f'{GITHUB_URL}repos/{repo}/{url}',
-            headers=headers,
-            json=json,
-            data=data)
-    if status_code and r.status_code != status_code:
-        raise BadStatus({
-            'method': verb,
-            'endpoint': f'{GITHUB_URL}repos/{repo}/{url}',
-            'status_code': r.status_code,
-            'data': data,
-            'json': json,
-            'message': 'github error',
-            'github_json': r.json()
-        },
-                        r.status_code)
-    elif json_response:
-        return r.json()
-    else:
-        return r.text
-
-
-def get_repo(repo,
-             url,
-             headers=None,
-             status_code=None,
-             user='user1',
-             json_response=True):
-    return get_github(
-        f'repos/{repo}/{url}',
-        headers,
-        status_code,
-        user=user,
-        json_response=json_response)
-
-
-def get_github(url,
-               headers=None,
-               status_code=None,
-               user='user1',
-               json_response=True):
-    if headers is None:
-        headers = {}
-    if 'Authorization' in headers:
-        raise ValueError('Header already has Authorization? ' + str(headers))
-    headers['Authorization'] = 'token ' + oauth_tokens[user]
-    r = requests.get(f'{GITHUB_URL}{url}', headers=headers)
-    if status_code and r.status_code != status_code:
-        raise BadStatus({
-            'method': 'get',
-            'endpoint': f'{GITHUB_URL}{url}',
-            'status_code': r.status_code,
-            'message': 'github error',
-            'github_json': r.json()
-        },
-                        r.status_code)
-    elif json_response:
         return r.json()
     else:
         return r.text
@@ -252,6 +113,22 @@ class TestCI(unittest.TestCase):
 
     DELAY_IN_SECONDS = 5
     MAX_POLLS = 10
+
+    def poll_github_until_merged(self, pr_number):
+        _, status_code = get_repo(
+            'hail-is/ci-test',
+            f'pulls/{pr_number}/merge',
+            # 204 NO CONTENT means merged, 404 means not merged
+            status_code=[204, 404],
+            json_response=False)
+        while status_code != 204:
+            _, status_code = get_repo(
+                'hail-is/ci-test',
+                f'pulls/{pr_number}/merge',
+                # 204 NO CONTENT means merged, 404 means not merged
+                status_code=[204, 404],
+                json_response=False)
+
 
     def poll_until_deployable(self,
                               source_ref,
@@ -554,38 +431,7 @@ class TestCI(unittest.TestCase):
                 pr_number[BRANCH_NAME] = gh_pr[BRANCH_NAME]['number']
                 self.approve(pr_number[BRANCH_NAME], source_sha[BRANCH_NAME])
 
-                # wait for fast branch to finish and merge
-                pr[BRANCH_NAME] = self.poll_until_deployed_pr(BRANCH_NAME)
-                assertDictHasKVs(
-                    pr[BRANCH_NAME].to_json(),
-                    {
-                        "target": {
-                            "ref": {
-                                "repo": {
-                                    "owner": "hail-is",
-                                    "name": "ci-test"
-                                },
-                                "name": "master"
-                            },
-                            "sha": first_target_sha
-                        },
-                        "source": {
-                            "ref": {
-                                "repo": {
-                                    "owner": "hail-is",
-                                    "name": "ci-test"
-                                },
-                                "name": BRANCH_NAME
-                            },
-                            "sha": source_sha[BRANCH_NAME]
-                        },
-                        "review": "approved",
-                        "build": {
-                            "type": "Deployed",
-                            "target_sha": first_target_sha
-                        },
-                        "number": str(pr_number[BRANCH_NAME])
-                    })
+                self.poll_github_until_merged(pr_number[BRANCH_NAME])
 
                 call(['git', 'fetch', 'origin'])
                 second_target_sha = self.rev_parse('origin/master')
