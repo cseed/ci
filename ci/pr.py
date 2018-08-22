@@ -1,12 +1,15 @@
-from batch.client import *
-from build_state import *
+from batch.client import Job
+from build_state import \
+    Failure, Deployable, Unknown, NoImage, Building, Buildable, Deployed, \
+    build_state_from_json
 from ci_logging import log
 from constants import *
 from git_state import FQSHA
 from http_helper import *
 from real_constants import *
-from sentinel import *
+from sentinel import Sentinel
 from subprocess import run, CalledProcessError
+import json
 
 
 def review_status(reviews):
@@ -229,23 +232,25 @@ class PR(object):
         return self.copy(
             source=new_source,
             target=new_target,
-            review='pending')._new_build(
-                try_new_build(new_source,
-                              new_target))
+            review='pending'
+        )._new_build(
+            try_new_build(new_source, new_target)
+        )
 
     def _new_target(self, new_target):
-        img = maybe_get_image(self.source, new_target)
-        return self.copy(target=new_target)._new_build(
-            determine_buildability(self.source,
-                                   new_target))
+        return self.copy(
+            target=new_target
+        )._new_build(
+            determine_buildability(self.source, new_target)
+        )
 
     def _new_source(self, new_source):
-        img = maybe_get_image(new_source, self.target)
         return self.copy(
             source=new_source,
-            review='pending')._new_build(
-                try_new_build(new_source,
-                              self.target))
+            review='pending'
+        )._new_build(
+            try_new_build(new_source, self.target)
+        )
 
     def _new_build(self, new_build):
         if self.build != new_build:
@@ -266,8 +271,8 @@ class PR(object):
             'context': CONTEXT
         }
         if isinstance(build, Failure) or isinstance(build, Deployable):
-            json[
-                'target_url'] = f'https://storage.googleapis.com/{GCS_BUCKET}/{self.source.sha}/{self.target.sha}/index.html'
+            json['target_url'] = \
+                f'https://storage.googleapis.com/{GCS_BUCKET}/{self.source.sha}/{self.target.sha}/index.html'
         try:
             post_repo(
                 self.target.ref.repo.qname,
@@ -317,7 +322,11 @@ class PR(object):
             'title': self.title
         }
 
+    # deprecated
     def is_mergeable(self):
+        return self.is_deployable()
+
+    def is_deployable(self):
         return (isinstance(self.build,
                            Deployable) and self.review == 'approved')
 

@@ -1,5 +1,6 @@
 from pr import PR
 from subprocess import call, run
+import json
 import os
 import requests
 import subprocess
@@ -251,6 +252,26 @@ class TestCI(unittest.TestCase):
 
     DELAY_IN_SECONDS = 5
     MAX_POLLS = 10
+
+    def poll_until_deployable(self,
+                              source_ref,
+                              delay_in_seconds=DELAY_IN_SECONDS,
+                              max_polls=MAX_POLLS):
+        return self.poll_pr(
+            source_ref,
+            lambda pr: not pr.is_deployable(),
+            delay_in_seconds=delay_in_seconds,
+            max_polls=max_polls)
+
+    def poll_until_deployed(self,
+                            source_ref,
+                            delay_in_seconds=DELAY_IN_SECONDS,
+                            max_polls=MAX_POLLS):
+        return self.poll_pr(
+            source_ref,
+            lambda pr: not pr.is_deployed(),
+            delay_in_seconds=delay_in_seconds,
+            max_polls=max_polls)
 
     def poll_until_finished_pr(self,
                                source_ref,
@@ -704,7 +725,7 @@ class TestCI(unittest.TestCase):
                     f'pulls/{pr_number}/reviews',
                     status_code=200)
                 time.sleep(7)
-                pr = self.poll_until_finished_pr(BRANCH_NAME)
+                pr = self.poll_until_deployed(BRANCH_NAME)
                 assertDictHasKVs(
                     pr.to_json(),
                     {
@@ -728,10 +749,9 @@ class TestCI(unittest.TestCase):
                             },
                             "sha": source_sha
                         },
-                        "review": "pending",
+                        "review": "approved",
                         "build": {
-                            "type": Match.any('Deployable',
-                                              'Deployed'),
+                            "type": Match.any('Deployed'),
                             "target_sha": target_sha
                         },
                         "number": pr_number

@@ -72,6 +72,7 @@ def github_pull_request():
     if action in ('opened', 'synchronize'):
         prs.pr_push(gh_pr)
     elif action == 'closed':
+        log.info(f'forgetting closed pr {gh_pr}')
         prs.forget(gh_pr)
     else:
         log.info(f'ignoring pull_request with action {action}')
@@ -265,4 +266,4 @@ def polling_event_loop():
 
 if __name__ == '__main__':
     threading.Thread(target=polling_event_loop).start()
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', threaded=False)

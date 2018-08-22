@@ -157,9 +157,13 @@ class PRS(object):
                 f'and {target}'
             )
             return
+        new_pr = pr.update_from_completed_batch_job(job)
+        log.info(f'new pr {new_pr}')
         self._set(source.ref,
                   target.ref,
-                  pr.update_from_completed_batch_job(job))
+                  new_pr)
+        # eagerly heal because a finished job might mean new work to do
+        self.heal_target(target.ref)
 
     def refresh_from_job(self, source, target, job):
         assert isinstance(job, Job), job
