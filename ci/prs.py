@@ -11,15 +11,16 @@ class PRS(object):
         self.target_source_pr = {}
         self.source_target_pr = {}
 
-    def _set(self, source, target, status):
-        assert isinstance(source, FQRef)
-        assert isinstance(target, FQRef)
+    def _set(self, source, target, pr):
+        assert isinstance(source, FQRef), source
+        assert isinstance(target, FQRef), target
+        assert isinstance(pr, PR), pr
         if target not in self.target_source_pr:
             self.target_source_pr[target] = {}
         if source not in self.source_target_pr:
             self.source_target_pr[source] = {}
-        self.target_source_pr[target][source] = status
-        self.source_target_pr[source][target] = status
+        self.target_source_pr[target][source] = pr
+        self.source_target_pr[source][target] = pr
 
     def _get(self, source=None, target=None, default=None):
         if source is None:
@@ -133,10 +134,7 @@ class PRS(object):
         else:
             pr = source
             assert isinstance(pr, GitHubPR) or isinstance(pr, PR)
-            x = self._pop(pr.source.ref, pr.target.ref)
-            if x:
-                assert x.source.sha == pr.source.sha, f'{x} {pr}'
-                assert x.target.sha == pr.target.sha, f'{x} {pr}'
+            self._pop(pr.source.ref, pr.target.ref)
 
     def review(self, gh_pr, state):
         assert state in ['pending', 'approved', 'changes_requested']
