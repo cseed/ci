@@ -41,8 +41,8 @@ class PRS(object):
     def _pop(self, source, target):
         assert isinstance(source, FQRef)
         assert isinstance(target, FQRef)
-        self.target_source_pr[target].pop(source, None)
-        return self.source_target_pr[source].pop(target, None)
+        self.target_source_pr.get(target, {}).pop(source, None)
+        return self.source_target_pr.get(source, {}).pop(target, None)
 
     def __str__(self):
         return json.dumps(self.to_json())
@@ -94,7 +94,7 @@ class PRS(object):
                     x for x in self.for_target(target) if x.is_pending_build()
                 ]
                 to_build = all_pending_prs
-        log.info(f'next to build for {target.repo.qname}: {to_build}')
+        log.info(f'next to build for {target.repo.qname}: {[str(x) for x in to_build]}')
         for pr in to_build:
             self._set(pr.source.ref, pr.target.ref, pr.build_it())
 
@@ -108,6 +108,7 @@ class PRS(object):
                 self._set(pr.source.ref,
                           pr.target.ref,
                           pr.update_from_github_push(new_target))
+            self.heal_target(new_target.ref)
 
     def pr_push(self, gh_pr):
         assert isinstance(gh_pr, GitHubPR), gh_pr

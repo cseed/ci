@@ -464,7 +464,7 @@ class TestCI(unittest.TestCase):
                                     "owner": "hail-is",
                                     "name": "ci-test"
                                 },
-                                "name": BRANCH_NAME
+                                "name": SLOW_BRANCH_NAME
                             },
                             "sha": source_sha[SLOW_BRANCH_NAME]
                         },
@@ -476,7 +476,7 @@ class TestCI(unittest.TestCase):
                         },
                         "number": str(pr_number[SLOW_BRANCH_NAME])
                     })
-                second_slow_job_id = pr[SLOW_BRANCH_NAME].build.job_id
+                second_slow_job_id = pr[SLOW_BRANCH_NAME].build.job.id
 
                 pr[SLOW_BRANCH_NAME] = self.poll_until_finished_pr(
                     SLOW_BRANCH_NAME)
@@ -499,7 +499,7 @@ class TestCI(unittest.TestCase):
                                     "owner": "hail-is",
                                     "name": "ci-test"
                                 },
-                                "name": BRANCH_NAME
+                                "name": SLOW_BRANCH_NAME
                             },
                             "sha": source_sha[SLOW_BRANCH_NAME]
                         },
@@ -560,8 +560,7 @@ class TestCI(unittest.TestCase):
                         "head": BRANCH_NAME,
                         "base": "master"
                     },
-                    status_code=201,
-                    token=oauth_tokens['user2'])
+                    status_code=201)
                 pr_number = str(gh_pr['number'])
                 post_repo(
                     'hail-is/ci-test',
@@ -571,7 +570,6 @@ class TestCI(unittest.TestCase):
                         "event": "APPROVE"
                     },
                     status_code=200,
-                    user='user2',
                     token=oauth_tokens['user2'])
                 get_repo(
                     'hail-is/ci-test',

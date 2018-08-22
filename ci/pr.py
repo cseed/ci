@@ -127,7 +127,7 @@ def maybe_get_image(source, target):
         # should do in that case. maybe 500'ing is OK?
         with open('hail-ci-build-image', 'r') as f:
             return f.read().strip()
-    except (CalledProcessError | FileNotFoundError) as e:
+    except (CalledProcessError, FileNotFoundError) as e:
         os.exception(f'could not get hail-ci-build-image due to {e}')
         return None
     finally:
