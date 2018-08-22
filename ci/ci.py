@@ -18,10 +18,12 @@ watched_repos = {Repo(x[0], x[1]) for x in (x.split('/') for x in INITIAL_WATCHE
 
 app = Flask(__name__)
 
+
 @app.errorhandler(BadStatus)
 def handle_invalid_usage(error):
     log.exception('bad status found when making request')
     return jsonify(error.data), error.status_code
+
 
 @app.route('/status')
 def status():
@@ -29,6 +31,7 @@ def status():
         'watched_repos': [x.to_json() for x in watched_repos],
         'prs': prs.to_json()
     })
+
 
 @app.route('/push', methods=['POST'])
 def github_push():
@@ -41,6 +44,7 @@ def github_push():
     else:
         log.info(f'ignoring ref push {ref} because it does not start with "refs/heads/"')
     return '', 200
+
 
 @app.route('/pull_request', methods=['POST'])
 def github_pull_request():
@@ -56,6 +60,7 @@ def github_pull_request():
     else:
         log.info(f'ignoring pull_request with action {action}')
     return '', 200
+
 
 @app.route('/pull_request_review', methods=['POST'])
 def github_pull_request_review():
@@ -78,6 +83,7 @@ def github_pull_request_review():
         log.info(f'ignoring pull_request_review with action {action}')
     return '', 200
 
+
 @app.route('/ci_build_done', methods=['POST'])
 def ci_build_done():
     d = request.json
@@ -87,6 +93,7 @@ def ci_build_done():
     job = Job(batch_client, d['id'], attributes=attributes, _status=d)
     receive_job(source, target, job)
     return '', 200
+
 
 @app.route('/refresh_batch_state', methods=['POST'])
 def refresh_batch_state():
@@ -115,6 +122,7 @@ def refresh_batch_state():
         prs.refresh_from_job(source, target, job)
     return '', 200
 
+
 @app.route('/force_retest', methods=['POST'])
 def force_retest():
     d = request.json
@@ -122,6 +130,7 @@ def force_retest():
     target = FQRef.from_json(d['target'])
     prs.build(source, target)
     return '', 200
+
 
 @app.route('/refresh_github_state', methods=['POST'])
 def refresh_github_state():
@@ -140,6 +149,7 @@ def refresh_github_state():
             log.exception(f'could not refresh state for {target_repo} due to {e}')
     return '', 200
 
+
 def refresh_pulls(pulls_by_target):
     open_gh_target_refs = {x for x in pulls_by_target.keys()}
     for dead_target_ref in set(prs.live_target_refs()) - open_gh_target_refs:
@@ -155,6 +165,7 @@ def refresh_pulls(pulls_by_target):
             prs.forget(source_ref, target_ref)
     return pulls_by_target
 
+
 def refresh_reviews(pulls_by_target):
     for (_, pulls) in pulls_by_target.items():
         for gh_pr in pulls:
@@ -165,6 +176,7 @@ def refresh_reviews(pulls_by_target):
             )
             state = overall_review_state(reviews)['state']
             prs.review(gh_pr, state)
+
 
 def refresh_statuses(pulls_by_target):
     for pulls in pulls_by_target.values():
@@ -179,40 +191,14 @@ def refresh_statuses(pulls_by_target):
                 build_state_from_gh_json(statuses)
             )
 
+
 @app.route('/heal', methods=['POST'])
 def heal():
-    for target in prs.live_targets():
-        ready_to_merge = prs.ready_to_merge(target)
-        if len(ready_to_merge) != 0:
-            pr = ready_to_merge[-1]
-            log.info(f'merging {pr}')
-            (gh_response, status_code) = put_repo(
-                pr.target.ref.repo.qname,
-                f'pulls/{pr.number}/merge',
-                json={
-                    'merge_method': 'squash',
-                    'sha': pr.source.sha
-                },
-                status_code=[200, 409]
-            )
-            if status_code == 200:
-                log.info(f'successful merge of {pr}')
-            else:
-                assert status_code == 409, f'{status_code} {gh_response}'
-                log.warning(
-                    f'failure to merge {pr} due to {status_code} {gh_response}, '
-                    f'removing PR, github state refresh will recover and retest '
-                    f'if necessary')
-                prs.forget(pr)
-            # FIXME: eagerly update statuses for all PRs targeting this branch
-        else:
-            to_build = prs.to_build_next(target)
-            log.info(f'nothing to merge into {target}, will build {to_build}')
-            for pr in to_build:
-                pr.build_it()
+    prs.heal()
     return '', 200
 
 ###############################################################################
+
 
 def receive_job(source, target, job):
     upload_public_gs_file_from_string(
@@ -227,12 +213,14 @@ def receive_job(source, target, job):
     )
     prs.build_finished(source, target, job)
 
+
 def get_reviews(repo, pr_number):
     return get_repo(
         repo.qname,
         'pulls/' + pr_number + '/reviews',
         status_code=200
     )
+
 
 def polling_event_loop():
     time.sleep(1)
@@ -247,6 +235,7 @@ def polling_event_loop():
         except Exception as e:
             log.error(f'Could not poll due to exception: {e}')
         time.sleep(REFRESH_INTERVAL_IN_SECONDS)
+
 
 if __name__ == '__main__':
     threading.Thread(target=polling_event_loop).start()

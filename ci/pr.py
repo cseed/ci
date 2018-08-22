@@ -92,8 +92,8 @@ def maybe_get_image(source, target):
     assert isinstance(target, FQSHA)
     d = os.getcwd()
     try:
-        trepo = target.ref.repo
         srepo = source.ref.repo
+        trepo = target.ref.repo
         if not os.path.isdir(trepo.qname):
             os.makedirs(trepo.qname, exist_ok=True)
             os.chdir(trepo.qname)
@@ -159,23 +159,27 @@ class GitHubPR(object):
             'target': self.target.to_json()
         }
 
-    def to_PR(self):
-        return PR.fresh(
+    def to_PR(self, start_build=False):
+        pr = PR.fresh(
             self.source,
             self.target,
             self.number,
             self.title
         )
+        if start_build:
+            return pr.build_it()
+        else:
+            return pr
 
 class PR(object):
-    def __init__(self, target, source, review, build, number, title):
+    def __init__(self, source, target, review, build, number, title):
         assert isinstance(target, FQSHA), target
         assert isinstance(source, FQSHA), source
         assert number is None or isinstance(number, str)
         assert title is None or isinstance(title, str)
         assert review in ['pending', 'approved', 'changes_requested']
-        self.target = target
         self.source = source
+        self.target = target
         self.review = review
         self.build = build
         self.number = number
@@ -184,15 +188,15 @@ class PR(object):
     keep = Sentinel()
 
     def copy(self,
-             target=keep,
              source=keep,
+             target=keep,
              review=keep,
              build=keep,
              number=keep,
              title=keep):
         return PR(
-            target=self.target if target is PR.keep else target,
             source=self.source if source is PR.keep else source,
+            target=self.target if target is PR.keep else target,
             review=self.review if review is PR.keep else review,
             build=self.build if build is PR.keep else build,
             number=self.number if number is PR.keep else number,
@@ -249,11 +253,10 @@ class PR(object):
         )
 
     def build_it(self):
-        assert (
-            isinstance(self.build, Buildable) or
-            isinstance(self.build, Failure)
-        )
         return self._new_build(try_new_build(self.source, self.target))
+
+    def merged(self):
+        return self._new_build(Deployed(-1, 'NO SHAS YET!!', self.target.sha))
 
     def notify_github(self, build):
         log.info(f'notifying github of {build} {self}')
@@ -283,8 +286,8 @@ class PR(object):
     @staticmethod
     def fresh(source, target, number=None, title=None):
         return PR(
-            target,
             source,
+            target,
             'pending',
             Unknown(),
             number,
@@ -335,6 +338,9 @@ class PR(object):
     def is_pending_build(self):
         return isinstance(self.build, Buildable)
 
+    def is_deployed(self):
+        return isinstance(self.build, Deployed)
+
     def update_from_github_push(self, push):
         assert isinstance(push, FQSHA)
         assert self.target.ref == push.ref, f'{push} {self}'
@@ -383,7 +389,7 @@ class PR(object):
             return self.update_from_completed_batch_job(job)
         elif state == 'Cancelled':
             log.error(f'a job for me was cancelled {job.id} {job.attributes} {self}')
-            return self._new_build(try_new_build(self.target, self.source))
+            return self._new_build(try_new_build(self.source, self.target))
         else:
             assert state == 'Created', f'{state} {job.id} {job.attributes} {self}'
             assert 'target' in job.attributes, job.attributes
@@ -396,10 +402,10 @@ class PR(object):
         assert isinstance(job, Job)
         job_status = job.cached_status()
         exit_code = job_status['exit_code']
-        job_target = FQSHA.from_json(json.loads(job.attributes['target']))
         job_source = FQSHA.from_json(json.loads(job.attributes['source']))
-        assert job_target.ref == self.target.ref
+        job_target = FQSHA.from_json(json.loads(job.attributes['target']))
         assert job_source.ref == self.source.ref
+        assert job_target.ref == self.target.ref
 
         if job_target.sha != self.target.sha:
             log.info(f'notified of job for old target {job.id} {job.attributes} {self}')

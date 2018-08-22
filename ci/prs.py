@@ -59,7 +59,20 @@ class PRS(object):
             if pr.is_mergeable()
         ]
 
-    def to_build_next(self, target):
+    def heal(self):
+        for target in self.live_targets():
+            self.heal_target(target)
+
+    def heal_target(self, target):
+        assert isinstance(target, FQRef)
+        ready_to_merge = self.ready_to_merge(target)
+        if len(ready_to_merge) != 0:
+            pr = ready_to_merge[-1]
+            self.deploy(pr)
+        else:
+            self.build_next(target)
+
+    def build_next(self, target):
         approved = [
             pr
             for pr in self.for_target(target)
@@ -67,14 +80,19 @@ class PRS(object):
         ]
         running = [x for x in approved if x.is_running()]
         if len(running) != 0:
-            return []
+            to_build = []
         else:
             approved_and_need_status = [x for x in approved if x.is_pending_build()]
             if len(approved_and_need_status) != 0:
-                return [approved_and_need_status[-1]]
+                to_build = [approved_and_need_status[-1]]
             else:
                 all_pending_prs = [x for x in self.for_target(target) if x.is_pending_build()]
-                return all_pending_prs
+                to_build = all_pending_prs
+        log.info(f'next to build: {to_build}')
+        for pr in to_build:
+            self._set(pr.source.ref,
+                      pr.target.ref,
+                      pr.build_it())
 
     def push(self, new_target):
         assert isinstance(new_target, FQSHA), new_target
@@ -83,18 +101,19 @@ class PRS(object):
             log.info(f'no PRs for target {new_target}')
         else:
             for pr in prs:
-                new_status = pr.update_from_github_push(new_target)
-                self._set(pr.source.ref, pr.target.ref, new_status)
+                self._set(pr.source.ref,
+                          pr.target.ref,
+                          pr.update_from_github_push(new_target))
 
     def pr_push(self, gh_pr):
         assert isinstance(gh_pr, GitHubPR), gh_pr
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
             log.warning(f'found new PR {gh_pr}')
-            pr = gh_pr.to_PR()
-        self._set(gh_pr.source.ref,
-                  gh_pr.target.ref,
-                  pr.update_from_github_pr(gh_pr))
+            pr = gh_pr.to_PR(start_build=True)
+        else:
+            pr = pr.update_from_github_pr(gh_pr)
+        self._set(gh_pr.source.ref, gh_pr.target.ref, pr)
 
     def forget_target(self, target):
         assert isinstance(target, FQRef), f'{type(target)} {target}'
@@ -163,4 +182,27 @@ class PRS(object):
             raise ValueError(f'no such pr {source} {target}')
         self._set(source, target, pr.build_it())
 
+    def deploy(self, pr):
+        assert isinstance(pr, PR)
+        log.info(f'merging {pr}')
+        (gh_response, status_code) = put_repo(
+            pr.target.ref.repo.qname,
+            f'pulls/{pr.number}/merge',
+            json={
+                'merge_method': 'squash',
+                'sha': pr.source.sha
+            },
+            status_code=[200, 409]
+        )
+        if status_code == 200:
+            log.info(f'successful merge of {pr}')
+            self._set(pr.source.ref, pr.target.ref, pr.merged())
+        else:
+            assert status_code == 409, f'{status_code} {gh_response}'
+            log.warning(
+                f'failure to merge {pr} due to {status_code} {gh_response}, '
+                f'removing PR, github state refresh will recover and retest '
+                f'if necessary')
+            self.forget(pr)
+        # FIXME: eagerly update statuses for all PRs targeting this branch
 

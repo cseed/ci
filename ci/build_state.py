@@ -31,19 +31,19 @@ def build_state_from_gh_json(d):
 def build_state_from_json(d):
     t = d['type']
     if t == 'Deployed':
-        return Deployed(doc['job_id'], doc['merged_sha'], doc['target_sha'])
+        return Deployed(d['job_id'], d['merged_sha'], d['target_sha'])
     elif t == 'Deploying':
-        return Deploying(doc['job_id'], doc['merged_sha'], doc['target_sha'])
+        return Deploying(d['job_id'], d['merged_sha'], d['target_sha'])
     elif t == 'Deployable':
-        return Deployable(doc['merged_sha'], doc['target_sha'])
+        return Deployable(d['merged_sha'], d['target_sha'])
     elif t == 'Failure':
-        return Failure(doc['exit_code'], doc['image'], doc['target_sha'])
+        return Failure(d['exit_code'], d['image'], d['target_sha'])
     elif t == 'NoMergeSHA':
-        return NoMergeSHA(doc['exit_code'], doc['target_sha'])
+        return NoMergeSHA(d['exit_code'], d['target_sha'])
     elif t == 'Building':
-        return Building(batch_client.get_job(doc['job_id']), doc['image'], doc['target_sha'])
+        return Building(batch_client.get_job(d['job_id']), d['image'], d['target_sha'])
     elif t == 'Buildable':
-        return Buildable(doc['image'], doc['target_sha'])
+        return Buildable(d['image'], d['target_sha'])
     else:
         assert t == 'Unknown'
         return Unknown()
@@ -263,7 +263,7 @@ class Building(object):
     def to_json(self):
         return {
             'type': 'Building',
-            'job': self.job.id,
+            'job_id': self.job.id,
             'image': self.image,
             'target_sha': self.target_sha
         }

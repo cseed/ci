@@ -231,18 +231,18 @@ class TestCI(unittest.TestCase):
         status = ci_get('/status', status_code=200)
         assert 'prs' in status
         assert 'watched_repos' in status
-        prs = [PR.from_json(x) for x in status['prs']]
-        prs = [pr for pr in prs if pr.source.ref.name == source_ref]
-        assert len(prs) == 1
+        all_prs = [PR.from_json(x) for x in status['prs']]
+        prs = [pr for pr in all_prs if pr.source.ref.name == source_ref]
+        assert len(prs) == 1, [str(x.source.ref) for x in all_prs]
         return prs[0]
 
     DELAY_IN_SECONDS=5
-    MAX_POLLS=60
+    MAX_POLLS=10
 
     def poll_until_finished_pr(self, source_ref, delay_in_seconds=DELAY_IN_SECONDS, max_polls=MAX_POLLS):
         return self.poll_pr(
             source_ref,
-            lambda pr: pr['status']['state'] == 'running' or pr['status']['state'] == 'pending',
+            lambda pr: pr.is_running() or pr.is_pending_build(),
             delay_in_seconds=delay_in_seconds,
             max_polls=max_polls
         )
@@ -250,7 +250,7 @@ class TestCI(unittest.TestCase):
     def poll_until_running_pr(self, source_ref, delay_in_seconds=DELAY_IN_SECONDS, max_polls=MAX_POLLS):
         return self.poll_pr(
             source_ref,
-            lambda pr: pr['status']['state'] == 'pending',
+            lambda pr: pr.is_pending_build(),
             delay_in_seconds=delay_in_seconds,
             max_polls=max_polls
         )
@@ -258,7 +258,7 @@ class TestCI(unittest.TestCase):
     def poll_until_merged_pr(self, source_ref, delay_in_seconds=DELAY_IN_SECONDS, max_polls=MAX_POLLS):
         return self.poll_pr(
             source_ref,
-            lambda pr: pr['status']['state'] != 'merged',
+            lambda pr: pr.is_deployed(),
             delay_in_seconds=delay_in_seconds,
             max_polls=max_polls
         )
@@ -284,9 +284,9 @@ class TestCI(unittest.TestCase):
             status = ci_get('/status', status_code=200)
             assert 'prs' in status
             assert 'watched_repos' in status
-            prs = [PR.from_json(x) for x in status['prs']]
-            prs = [pr for pr in prs if pr.source.ref.name == source_ref]
-            assert len(prs) <= 1
+            all_prs = [PR.from_json(x) for x in status['prs']]
+            prs = [pr for pr in all_prs if pr.source.ref.name == source_ref]
+            assert len(prs) <= 1, [str(x.source.ref) for x in all_prs]
             polls = polls + 1
         assert len(prs) == 1
         return prs[0]
@@ -318,14 +318,14 @@ class TestCI(unittest.TestCase):
                 pr_number = data['number']
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
-                assertDictHasKVs(pr, {
+                assertDictHasKVs(pr.to_json(), {
                     "target": {
                         "ref": {
                             "repo": {
                                 "owner": "hail-is",
                                 "name": "ci-test"
                             },
-                            "ref": "master"
+                            "name": "master"
                         },
                         "sha": target_sha
                     },
@@ -335,7 +335,7 @@ class TestCI(unittest.TestCase):
                                 "owner": "hail-is",
                                 "name": "ci-test"
                             },
-                            "ref": "test_pull_request_trigger"
+                            "name": BRANCH_NAME
                         },
                         "sha": source_sha
                     },
@@ -344,10 +344,9 @@ class TestCI(unittest.TestCase):
                         "type": "Deployable",
                         "target_sha": target_sha
                     },
-                    "number": pr_number,
-                    "title": pr_number
+                    "number": pr_number
                 })
-                assert pr['status']['job_id'] is not None
+                assert pr.build.job_id is not None
             finally:
                 call(['git', 'push', 'origin', ':' + BRANCH_NAME])
                 if pr_number is not None:
@@ -424,22 +423,37 @@ class TestCI(unittest.TestCase):
                 # get details on first job of slow branch
                 pr[SLOW_BRANCH_NAME] = self.poll_until_pr_exists_and(
                     SLOW_BRANCH_NAME,
-                    lambda x: x['status']['state'] == 'running'
+                    lambda x: x.is_running()
                 )
-                assertDictHasKVs(pr[SLOW_BRANCH_NAME], {
-                    'source_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_ref': 'master',
-                    'status': {
-                        'state': 'running',
-                        'review_state': 'pending',
-                        'source_sha': source_sha[SLOW_BRANCH_NAME],
-                        'target_sha': first_target_sha,
-                        'pr_number': str(pr_number[SLOW_BRANCH_NAME]),
-                        'docker_image': 'google/cloud-sdk:alpine'
-                    }
+                assertDictHasKVs(pr[SLOW_BRANCH_NAME].to_json(), {
+                    "target": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": "master"
+                        },
+                        "sha": first_target_sha
+                    },
+                    "source": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": BRANCH_NAME
+                        },
+                        "sha": source_sha[SLOW_BRANCH_NAME]
+                    },
+                    "review": "pending",
+                    "build": {
+                        "type": "Building",
+                        "target_sha": first_target_sha
+                    },
+                    "number": str(pr_number[SLOW_BRANCH_NAME])
                 })
-                first_slow_job_id = pr[SLOW_BRANCH_NAME]['status']['job_id']
+                first_slow_job_id = pr[SLOW_BRANCH_NAME].build.job.id
                 assert first_slow_job_id is not None
 
                 # start fast branch
@@ -450,18 +464,33 @@ class TestCI(unittest.TestCase):
 
                 # wait for fast branch to finish and merge
                 pr[BRANCH_NAME] = self.poll_until_merged_pr(BRANCH_NAME)
-                assertDictHasKVs(pr[BRANCH_NAME], {
-                    'source_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_ref': 'master',
-                    'status': {
-                        'state': 'merged',
-                        'review_state': 'approved',
-                        'source_sha': source_sha[BRANCH_NAME],
-                        'target_sha': first_target_sha,
-                        'pr_number': str(pr_number[BRANCH_NAME]),
-                        'docker_image': 'google/cloud-sdk:alpine'
-                    }
+                assertDictHasKVs(pr[BRANCH_NAME].to_json(), {
+                    "target": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": "master"
+                        },
+                        "sha": first_target_sha
+                    },
+                    "source": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": BRANCH_NAME
+                        },
+                        "sha": source_sha[BRANCH_NAME]
+                    },
+                    "review": "approved",
+                    "build": {
+                        "type": "Deployed",
+                        "target_sha": first_target_sha
+                    },
+                    "number": str(pr_number[BRANCH_NAME])
                 })
 
                 call(['git', 'fetch', 'origin'])
@@ -471,36 +500,66 @@ class TestCI(unittest.TestCase):
 
                 # slow branch should be running again with the new target sha
                 pr[SLOW_BRANCH_NAME] = self.get_pr(SLOW_BRANCH_NAME)
-                assertDictHasKVs(pr[SLOW_BRANCH_NAME], {
-                    'source_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_ref': 'master',
-                    'status': {
-                        'state': 'running',
-                        'review_state': 'pending',
-                        'source_sha': source_sha[SLOW_BRANCH_NAME],
-                        'target_sha': second_target_sha,
-                        'pr_number': str(pr_number[SLOW_BRANCH_NAME]),
-                        'docker_image': 'google/cloud-sdk:alpine',
-                        'job_id': Match.notEqual(first_slow_job_id)
-                    }
+                assertDictHasKVs(pr[SLOW_BRANCH_NAME].to_json(), {
+                    "target": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": "master"
+                        },
+                        "sha": second_target_sha
+                    },
+                    "source": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": BRANCH_NAME
+                        },
+                        "sha": source_sha[SLOW_BRANCH_NAME]
+                    },
+                    "review": "pending",
+                    "build": {
+                        "type": "Building",
+                        "target_sha": second_target_sha,
+                        "job_id": Match.notEqual(first_slow_job_id)
+                    },
+                    "number": str(pr_number[SLOW_BRANCH_NAME])
                 })
-                second_slow_job_id = pr[SLOW_BRANCH_NAME]['status']['job_id']
+                second_slow_job_id = pr[SLOW_BRANCH_NAME].build.job_id
 
                 pr[SLOW_BRANCH_NAME] = self.poll_until_finished_pr(SLOW_BRANCH_NAME)
-                assertDictHasKVs(pr[SLOW_BRANCH_NAME], {
-                    'source_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_ref': 'master',
-                    'status': {
-                        'state': 'success',
-                        'review_state': 'pending',
-                        'source_sha': source_sha[SLOW_BRANCH_NAME],
-                        'target_sha': second_target_sha,
-                        'pr_number': str(pr_number[SLOW_BRANCH_NAME]),
-                        'docker_image': 'google/cloud-sdk:alpine',
-                        'job_id': second_slow_job_id
-                    }
+                assertDictHasKVs(pr[SLOW_BRANCH_NAME].to_json(), {
+                    "target": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": "master"
+                        },
+                        "sha": second_target_sha
+                    },
+                    "source": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": BRANCH_NAME
+                        },
+                        "sha": source_sha[SLOW_BRANCH_NAME]
+                    },
+                    "review": "pending",
+                    "build": {
+                        "type": "Building",
+                        "target_sha": second_target_sha,
+                        "job_id": second_slow_job_id
+                    },
+                    "number": str(pr_number[SLOW_BRANCH_NAME])
                 })
             finally:
                 call(['git', 'push', 'origin', ':'+SLOW_BRANCH_NAME])
@@ -552,17 +611,33 @@ class TestCI(unittest.TestCase):
                 )
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
-                assertDictHasKVs(pr, {
-                    'source_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_url': 'https://github.com/hail-is/ci-test.git',
-                    'target_ref': 'master',
-                    'status': {
-                        'state': Match.any('success', 'merged'),
-                        'review_state': 'approved',
-                        'source_sha': source_sha,
-                        'target_sha': target_sha,
-                        'pr_number': pr_number
-                    }
+                assertDictHasKVs(pr.to_json(), {
+                    "target": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": "master"
+                        },
+                        "sha": second_target_sha
+                    },
+                    "source": {
+                        "ref": {
+                            "repo": {
+                                "owner": "hail-is",
+                                "name": "ci-test"
+                            },
+                            "name": BRANCH_NAME
+                        },
+                        "sha": source_sha[SLOW_BRANCH_NAME]
+                    },
+                    "review": "pending",
+                    "build": {
+                        "type": Match.any('Deployable', 'Deployed'),
+                        "target_sha": target_sha
+                    },
+                    "number": pr_number
                 })
                 get_repo(
                     'hail-is/ci-test',
