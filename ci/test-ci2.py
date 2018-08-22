@@ -1,8 +1,6 @@
-from git_state import *
 from pr import PR
 from subprocess import call, run
 import os
-import random
 import requests
 import subprocess
 import tempfile
@@ -701,7 +699,7 @@ class TestCI(unittest.TestCase):
                     },
                     status_code=200,
                     user='user2')
-                r = get_repo(
+                get_repo(
                     'hail-is/ci-test',
                     f'pulls/{pr_number}/reviews',
                     status_code=200)
@@ -718,7 +716,7 @@ class TestCI(unittest.TestCase):
                                 },
                                 "name": "master"
                             },
-                            "sha": second_target_sha
+                            "sha": target_sha
                         },
                         "source": {
                             "ref": {
@@ -728,7 +726,7 @@ class TestCI(unittest.TestCase):
                                 },
                                 "name": BRANCH_NAME
                             },
-                            "sha": source_sha[SLOW_BRANCH_NAME]
+                            "sha": source_sha
                         },
                         "review": "pending",
                         "build": {
@@ -741,8 +739,8 @@ class TestCI(unittest.TestCase):
                 get_repo(
                     'hail-is/ci-test',
                     f'pulls/{pr_number}/merge',
-                    status_code=
-                    204,  # 204 NO CONTENT means merged, 404 means not merged
+                    # 204 NO CONTENT means merged, 404 means not merged
+                    status_code=204,
                     json_response=False)
             finally:
                 call(['git', 'push', 'origin', ':' + BRANCH_NAME])

@@ -1,4 +1,8 @@
-from pr import *
+from batch.client import Job
+from ci_logging import log
+from git_state import FQRef, FQSHA
+from http_helper import put_repo
+from pr import PR, GitHubPR
 import json
 
 
@@ -149,7 +153,8 @@ class PRS(object):
         pr = self._get(source.ref, target.ref)
         if pr is None:
             log.warning(
-                f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}'
+                f'ignoring job {job.id} {job.attributes} for unknown {source} '
+                f'and {target}'
             )
             return
         self._set(source.ref,
@@ -161,7 +166,8 @@ class PRS(object):
         pr = self._get(source.ref, target.ref)
         if pr is None:
             log.warning(
-                f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}'
+                f'ignoring job {job.id} {job.attributes} for unknown {source} '
+                f'and {target}'
             )
             return
         self._set(source.ref, target.ref, pr.refresh_from_batch_job(job))
@@ -187,16 +193,14 @@ class PRS(object):
     def deploy(self, pr):
         assert isinstance(pr, PR)
         log.info(f'merging {pr}')
-        (gh_response,
-         status_code) = put_repo(
+        (gh_response, status_code) = put_repo(
              pr.target.ref.repo.qname,
              f'pulls/{pr.number}/merge',
              json={
                  'merge_method': 'squash',
                  'sha': pr.source.sha
              },
-             status_code=[200,
-                          409])
+             status_code=[200, 409])
         if status_code == 200:
             log.info(f'successful merge of {pr}')
             self._set(pr.source.ref, pr.target.ref, pr.merged())
