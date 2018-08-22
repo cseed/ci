@@ -3,7 +3,8 @@ import logging
 log = logging.getLogger('ci')
 log.setLevel(logging.INFO)
 fmt = logging.Formatter(
-    '%(levelname)s:%(asctime)s:%(filename)s:%(funcName)s:%(lineno)d: %(message)s'
+    '%(levelname)s:%(asctime)s:%(filename)s:%(funcName)s:%(lineno)d: '
+    '%(message)s'
 )
 
 fh = logging.FileHandler('ci.log')

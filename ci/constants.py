@@ -1,7 +1,5 @@
-from real_constants import *
-from batch.client import *
-from ci_logging import *
-import batch
+from ci_logging import log
+from batch.client import BatchClient
 import json
 import os
 

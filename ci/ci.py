@@ -1,22 +1,31 @@
-from batch_helper import *
-from build_state import *
-from constants import *
+from batch.client import Job
+from batch_helper import try_to_cancel_job, job_ordering
+from build_state import build_state_from_gh_json
+from ci_logging import log
+from constants import \
+    batch_client, \
+    INITIAL_WATCHED_REPOS, \
+    REFRESH_INTERVAL_IN_SECONDS
 from flask import Flask, request, jsonify
-from git_state import *
-from github import *
-from google_storage import *
-from pr import *
-from prs import *
-from real_constants import *
+from git_state import Repo, FQRef, FQSHA
+from github import open_pulls, overall_review_state
+from google_storage import \
+    upload_public_gs_file_from_filename, \
+    upload_public_gs_file_from_string
+from http_helper import BadStatus
+from http_helper import get_repo
+from pr import review_status, GitHubPR
+from prs import PRS
+from real_constants import BUILD_JOB_TYPE, GCS_BUCKET
 import collections
+import json
 import requests
 import threading
 import time
 
 prs = PRS()
 watched_repos = {
-    Repo(x[0],
-         x[1])
+    Repo(x[0], x[1])
     for x in (x.split('/') for x in INITIAL_WATCHED_REPOS)
 }
 
@@ -47,7 +56,8 @@ def github_push():
         prs.push(target)
     else:
         log.info(
-            f'ignoring ref push {ref} because it does not start with "refs/heads/"'
+            f'ignoring ref push {ref} because it does not start with '
+            '"refs/heads/"'
         )
     return '', 200
 
@@ -78,14 +88,14 @@ def github_pull_request_review():
         if state == 'changes_requested':
             prs.review(gh_pr, state)
         else:
-            # FIXME: if we track all reviewers, then we don't need to talk to github
+            # FIXME: track all reviewers, then we don't need to talk to github
             prs.review(
                 gh_pr,
                 review_status(
                     get_reviews(gh_pr.target.ref.repo,
                                 gh_pr.number)))
     elif action == 'dismissed':
-        # FIXME: if we track all reviewers, then we don't need to talk to github
+        # FIXME: track all reviewers, then we don't need to talk to github
         prs.review(
             gh_pr,
             review_status(get_reviews(gh_pr.target.ref.repo,
@@ -124,13 +134,15 @@ def refresh_batch_state():
                 else:
                     if job_ordering(job, job2) > 0:
                         log.info(
-                            f'cancelling {job2.id}, preferring {job.id}, {job2.attributes} {job.attributes} '
+                            f'cancelling {job2.id}, preferring {job.id}, '
+                            f'{job2.attributes} {job.attributes} '
                         )
                         try_to_cancel_job(job2)
                         latest_jobs[key] = job
                     else:
                         log.info(
-                            f'cancelling {job.id}, preferring {job2.id}, {job2.attributes} {job.attributes} '
+                            f'cancelling {job.id}, preferring {job2.id}, '
+                            f'{job2.attributes} {job.attributes} '
                         )
                         try_to_cancel_job(job)
     for ((source, target), job) in latest_jobs.items():
