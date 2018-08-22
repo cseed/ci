@@ -1,11 +1,11 @@
 from google.cloud import storage
-from real_constants import *
+from real_constants import GCP_PROJECT, VERSION
 import os
 
 # this is a bit of a hack, but makes my development life easier
 if 'GOOGLE_APPLICATION_CREDENTIALS' not in os.environ:
-    os.environ[
-        'GOOGLE_APPLICATION_CREDENTIALS'] = 'gcloud-token/hail-ci-' + VERSION + '.key'
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = \
+        'gcloud-token/hail-ci-' + VERSION + '.key'
 gcs_client = storage.Client(project=GCP_PROJECT)
 
 
