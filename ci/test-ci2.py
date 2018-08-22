@@ -572,7 +572,7 @@ class TestCI(unittest.TestCase):
                     },
                     status_code=200,
                     user='user2',
-                    token=oauth_tokens['user1'])
+                    token=oauth_tokens['user2'])
                 get_repo(
                     'hail-is/ci-test',
                     f'pulls/{pr_number}/reviews',
