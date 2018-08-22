@@ -1,6 +1,6 @@
 from batch.client import *
 from batch_helper import *
-from ci_logging import *
+from ci_logging import log
 from constants import *
 from real_constants import *
 import json
@@ -296,7 +296,8 @@ class Buildable(object):
         return Building(job_id, self.image, self.target_sha)
 
     def transition(self, other):
-        if not isinstance(other, Building):
+        if (not isinstance(other, Building) and
+            not isinstance(other, Buildable)):
             log.warning(f'unusual transition {self} to {other}')
         return other
 
@@ -314,8 +315,7 @@ class Buildable(object):
         return 'pending'
 
     def __eq__(self, other):
-        return (isinstance(other,
-                           Buildable) and self.image == other.image
+        return (isinstance(other, Buildable) and self.image == other.image
                 and self.target_sha == other.target_sha)
 
     def __ne__(self, other):

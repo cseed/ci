@@ -135,15 +135,13 @@ def refresh_batch_state():
                 else:
                     if job_ordering(job, job2) > 0:
                         log.info(
-                            f'cancelling {job2.id}, preferring {job.id}, '
-                            f'{job2.attributes} {job.attributes} '
+                            f'cancelling {job2.id}, preferring {job.id}'
                         )
                         try_to_cancel_job(job2)
                         latest_jobs[key] = job
                     else:
                         log.info(
-                            f'cancelling {job.id}, preferring {job2.id}, '
-                            f'{job2.attributes} {job.attributes} '
+                            f'cancelling {job.id}, preferring {job2.id}'
                         )
                         try_to_cancel_job(job)
     for ((source, target), job) in latest_jobs.items():
@@ -171,7 +169,7 @@ def refresh_github_state():
                 pulls_by_target[gh_pr.target.ref].append(gh_pr)
             refresh_pulls(pulls_by_target)
             refresh_reviews(pulls_by_target)
-            # FIXME: I can't fit statuses in the messages
+            # FIXME: I can't fit build state json in the status description
             # refresh_statuses(pulls_by_target)
         except Exception as e:
             log.exception(

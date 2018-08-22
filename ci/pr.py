@@ -214,6 +214,7 @@ class PR(object):
 
     def _maybe_new_shas(self, new_source=None, new_target=None):
         if new_source and self.source != new_source:
+            assert not self.is_deployed()
             if new_target and self.target != new_target:
                 log.info(
                     f'new source and target sha {new_target} {new_source} {self}'
@@ -221,12 +222,22 @@ class PR(object):
                 return self._new_target_and_source(new_target, new_source)
             else:
                 assert new_source is not None
-                log.info(f'new source sha {new_source} {self}')
-                return self._new_source(new_source)
+                if self.source != new_source:
+                    log.info(f'new source sha {new_source} {self}')
+                    return self._new_source(new_source)
+                else:
+                    return self
         else:
             assert new_target is not None
-            log.info(f'new target sha {new_target} {self}')
-            return self._new_target(new_target)
+            if self.target != new_target:
+                if not self.is_deployed():
+                    log.info(f'new target sha {new_target} {self}')
+                    return self._new_target(new_target)
+                else:
+                    log.info(f'ignoring new target sha for deployed PR {self}')
+                    return self
+            else:
+                return self
 
     def _new_target_and_source(self, new_target, new_source):
         return self.copy(
@@ -260,6 +271,7 @@ class PR(object):
     def build_it(self):
         return self._new_build(try_new_build(self.source, self.target))
 
+    # FIXME: this should be a verb
     def merged(self):
         return self._new_build(Deployed(-1, 'NO SHAS YET!!', self.target.sha))
 
@@ -364,9 +376,10 @@ class PR(object):
         return result
 
     def update_from_github_review_state(self, review):
-        log.info(f'review_state changing from {self.review} to {review}')
-        # FIXME: start deploy flow if approved and success
-        return self.copy(review=review)
+        if self.review != review:
+            log.info(f'review state changing from {self.review} to {review} {self}')
+            # FIXME: start deploy flow if approved and success
+            return self.copy(review=review)
 
     def update_from_github_status(self, build):
         if isinstance(self.build, Unknown):

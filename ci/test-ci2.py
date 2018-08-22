@@ -293,13 +293,13 @@ class TestCI(unittest.TestCase):
             delay_in_seconds=delay_in_seconds,
             max_polls=max_polls)
 
-    def poll_until_merged_pr(self,
-                             source_ref,
-                             delay_in_seconds=DELAY_IN_SECONDS,
-                             max_polls=MAX_POLLS):
+    def poll_until_deployed_pr(self,
+                               source_ref,
+                               delay_in_seconds=DELAY_IN_SECONDS,
+                               max_polls=MAX_POLLS):
         return self.poll_pr(
             source_ref,
-            lambda pr: pr.is_deployed(),
+            lambda pr: not pr.is_deployed(),
             delay_in_seconds=delay_in_seconds,
             max_polls=max_polls)
 
@@ -385,7 +385,7 @@ class TestCI(unittest.TestCase):
                         "base": "master"
                     },
                     status_code=201)
-                pr_number = data['number']
+                pr_number = str(data['number'])
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
                 assertDictHasKVs(
@@ -418,7 +418,6 @@ class TestCI(unittest.TestCase):
                         },
                         "number": pr_number
                     })
-                assert pr.build.job_id is not None
             finally:
                 call(['git', 'push', 'origin', ':' + BRANCH_NAME])
                 if pr_number is not None:
@@ -500,7 +499,7 @@ class TestCI(unittest.TestCase):
                 first_target_sha = self.rev_parse('master')
                 call(['git', 'checkout', '-b', SLOW_BRANCH_NAME])
                 with open('hail-ci-build.sh', 'w') as f:
-                    f.write('sleep 30')
+                    f.write('sleep 45')
                 call(['git', 'add', 'hail-ci-build.sh'])
                 call(['git', 'commit', '-m', 'foo'])
                 source_sha[SLOW_BRANCH_NAME] = self.push(SLOW_BRANCH_NAME)
@@ -532,7 +531,7 @@ class TestCI(unittest.TestCase):
                                     "owner": "hail-is",
                                     "name": "ci-test"
                                 },
-                                "name": BRANCH_NAME
+                                "name": SLOW_BRANCH_NAME
                             },
                             "sha": source_sha[SLOW_BRANCH_NAME]
                         },
@@ -556,7 +555,7 @@ class TestCI(unittest.TestCase):
                 self.approve(pr_number[BRANCH_NAME], source_sha[BRANCH_NAME])
 
                 # wait for fast branch to finish and merge
-                pr[BRANCH_NAME] = self.poll_until_merged_pr(BRANCH_NAME)
+                pr[BRANCH_NAME] = self.poll_until_deployed_pr(BRANCH_NAME)
                 assertDictHasKVs(
                     pr[BRANCH_NAME].to_json(),
                     {

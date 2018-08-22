@@ -93,7 +93,7 @@ class PRS(object):
                     x for x in self.for_target(target) if x.is_pending_build()
                 ]
                 to_build = all_pending_prs
-        log.info(f'next to build: {to_build}')
+        log.info(f'next to build for {target.repo.qname}: {to_build}')
         for pr in to_build:
             self._set(pr.source.ref, pr.target.ref, pr.build_it())
 
@@ -157,11 +157,9 @@ class PRS(object):
                 f'and {target}'
             )
             return
-        new_pr = pr.update_from_completed_batch_job(job)
-        log.info(f'new pr {new_pr}')
         self._set(source.ref,
                   target.ref,
-                  new_pr)
+                  pr.update_from_completed_batch_job(job))
         # eagerly heal because a finished job might mean new work to do
         self.heal_target(target.ref)
 
@@ -170,8 +168,7 @@ class PRS(object):
         pr = self._get(source.ref, target.ref)
         if pr is None:
             log.warning(
-                f'ignoring job {job.id} {job.attributes} for unknown {source} '
-                f'and {target}'
+                f'ignoring job {job.id} for unknown source and target'
             )
             return
         self._set(source.ref, target.ref, pr.refresh_from_batch_job(job))
