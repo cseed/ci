@@ -11,7 +11,14 @@ class BadStatus(Exception):
         self.status_code = status_code
 
 
-def patch_repo(repo, url, headers=None, json=None, data=None, status_code=None, json_response=True):
+def patch_repo(repo,
+               url,
+               headers=None,
+               json=None,
+               data=None,
+               status_code=None,
+               json_response=True,
+               token=oauth_token):
     return verb_repo(
         'patch',
         repo,
@@ -20,10 +27,18 @@ def patch_repo(repo, url, headers=None, json=None, data=None, status_code=None, 
         json=json,
         data=data,
         status_code=status_code,
-        json_response=json_response)
+        json_response=json_response,
+        token=token)
 
 
-def post_repo(repo, url, headers=None, json=None, data=None, status_code=None, json_response=True):
+def post_repo(repo,
+              url,
+              headers=None,
+              json=None,
+              data=None,
+              status_code=None,
+              json_response=True,
+              token=oauth_token):
     return verb_repo(
         'post',
         repo,
@@ -32,20 +47,34 @@ def post_repo(repo, url, headers=None, json=None, data=None, status_code=None, j
         json=json,
         data=data,
         status_code=status_code,
-        json_response=json_response)
+        json_response=json_response,
+        token=token)
 
 
-def get_repo(repo, url, headers=None, status_code=None, json_response=True):
+def get_repo(repo,
+             url,
+             headers=None,
+             status_code=None,
+             json_response=True,
+             token=oauth_token):
     return verb_repo(
         'get',
         repo,
         url,
         headers=headers,
         status_code=status_code,
-        json_response=json_response)
+        json_response=json_response,
+        token=token)
 
 
-def put_repo(repo, url, headers=None, json=None, data=None, status_code=None, json_response=True):
+def put_repo(repo,
+             url,
+             headers=None,
+             json=None,
+             data=None,
+             status_code=None,
+             json_response=True,
+             token=oauth_token):
     return verb_repo(
         'put',
         repo,
@@ -54,7 +83,8 @@ def put_repo(repo, url, headers=None, json=None, data=None, status_code=None, js
         json=json,
         data=data,
         status_code=status_code,
-        json_response=json_response)
+        json_response=json_response,
+        token=token)
 
 
 def get_github(url, headers=None, status_code=None):
@@ -68,7 +98,8 @@ def verb_repo(verb,
               json=None,
               data=None,
               status_code=None,
-              json_response=True):
+              json_response=True,
+              token=oauth_token):
     return verb_github(
         verb,
         f'repos/{repo}/{url}',
@@ -76,7 +107,8 @@ def verb_repo(verb,
         json=json,
         data=data,
         status_code=status_code,
-        json_response=json_response)
+        json_response=json_response,
+        token=token)
 
 
 def implies(antecedent, consequent):
@@ -92,7 +124,8 @@ def verb_github(verb,
                 json=None,
                 data=None,
                 status_code=None,
-                json_response=True):
+                json_response=True,
+                token=oauth_token):
     if isinstance(status_code, int):
         status_codes = [status_code]
     else:

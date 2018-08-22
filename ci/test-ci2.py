@@ -120,14 +120,16 @@ class TestCI(unittest.TestCase):
             f'pulls/{pr_number}/merge',
             # 204 NO CONTENT means merged, 404 means not merged
             status_code=[204, 404],
-            json_response=False)
+            json_response=False,
+            token=oauth_tokens['user1'])
         while status_code != 204:
             _, status_code = get_repo(
                 'hail-is/ci-test',
                 f'pulls/{pr_number}/merge',
                 # 204 NO CONTENT means merged, 404 means not merged
                 status_code=[204, 404],
-                json_response=False)
+                json_response=False,
+                token=oauth_tokens['user1'])
 
 
     def poll_until_deployable(self,
@@ -261,7 +263,8 @@ class TestCI(unittest.TestCase):
                         "head": BRANCH_NAME,
                         "base": "master"
                     },
-                    status_code=201)
+                    status_code=201,
+                    token=oauth_tokens['user1'])
                 pr_number = str(data['number'])
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
@@ -302,7 +305,8 @@ class TestCI(unittest.TestCase):
                         'hail-is/ci-test',
                         f'pulls/{pr_number}',
                         json={"state": "closed"},
-                        status_code=200)
+                        status_code=200,
+                        token=oauth_tokens['user1'])
 
     def create_pull_request(self, title, ref, base="master"):
         return post_repo(
@@ -313,7 +317,8 @@ class TestCI(unittest.TestCase):
                 "head": ref,
                 "base": base
             },
-            status_code=201)
+            status_code=201,
+            token=oauth_tokens['user1'])
 
     def create_and_push_empty_commit(self, source_ref, target_ref='master'):
         call(['git', 'checkout', target_ref])
@@ -342,7 +347,7 @@ class TestCI(unittest.TestCase):
                 "event": "APPROVE"
             },
             status_code=200,
-            user='user2')
+            token=oauth_tokens['user2'])
 
     def rev_parse(self, ref):
         return run(
@@ -514,7 +519,8 @@ class TestCI(unittest.TestCase):
                         'hail-is/ci-test',
                         f'pulls/{pr_number}',
                         json={"state": "closed"},
-                        status_code=200)
+                        status_code=200,
+                        token=oauth_tokens['user1'])
 
     def test_merges_approved_pr(self):
         BRANCH_NAME = 'test_merges_approved_pr'
@@ -554,7 +560,8 @@ class TestCI(unittest.TestCase):
                         "head": BRANCH_NAME,
                         "base": "master"
                     },
-                    status_code=201)
+                    status_code=201,
+                    token=oauth_tokens['user2'])
                 pr_number = str(gh_pr['number'])
                 post_repo(
                     'hail-is/ci-test',
@@ -564,11 +571,13 @@ class TestCI(unittest.TestCase):
                         "event": "APPROVE"
                     },
                     status_code=200,
-                    user='user2')
+                    user='user2',
+                    token=oauth_tokens['user1'])
                 get_repo(
                     'hail-is/ci-test',
                     f'pulls/{pr_number}/reviews',
-                    status_code=200)
+                    status_code=200,
+                    token=oauth_tokens['user1'])
                 time.sleep(7)
                 pr = self.poll_until_deployed(BRANCH_NAME)
                 assertDictHasKVs(
@@ -606,7 +615,8 @@ class TestCI(unittest.TestCase):
                     f'pulls/{pr_number}/merge',
                     # 204 NO CONTENT means merged, 404 means not merged
                     status_code=204,
-                    json_response=False)
+                    json_response=False,
+                    token=oauth_tokens['user1'])
             finally:
                 call(['git', 'push', 'origin', ':' + BRANCH_NAME])
                 if pr_number is not None:
