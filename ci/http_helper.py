@@ -11,7 +11,7 @@ class BadStatus(Exception):
         self.status_code = status_code
 
 
-def patch_repo(repo, url, headers=None, json=None, data=None, status_code=None):
+def patch_repo(repo, url, headers=None, json=None, data=None, status_code=None, json_response=True):
     return verb_repo(
         'patch',
         repo,
@@ -19,10 +19,11 @@ def patch_repo(repo, url, headers=None, json=None, data=None, status_code=None):
         headers=headers,
         json=json,
         data=data,
-        status_code=status_code)
+        status_code=status_code,
+        json_response=json_response)
 
 
-def post_repo(repo, url, headers=None, json=None, data=None, status_code=None):
+def post_repo(repo, url, headers=None, json=None, data=None, status_code=None, json_response=True):
     return verb_repo(
         'post',
         repo,
@@ -30,7 +31,8 @@ def post_repo(repo, url, headers=None, json=None, data=None, status_code=None):
         headers=headers,
         json=json,
         data=data,
-        status_code=status_code)
+        status_code=status_code,
+        json_response=json_response)
 
 
 def get_repo(repo, url, headers=None, status_code=None, json_response=True):
@@ -43,7 +45,7 @@ def get_repo(repo, url, headers=None, status_code=None, json_response=True):
         json_response=json_response)
 
 
-def put_repo(repo, url, headers=None, json=None, data=None, status_code=None):
+def put_repo(repo, url, headers=None, json=None, data=None, status_code=None, json_response=True):
     return verb_repo(
         'put',
         repo,
@@ -51,7 +53,8 @@ def put_repo(repo, url, headers=None, json=None, data=None, status_code=None):
         headers=headers,
         json=json,
         data=data,
-        status_code=status_code)
+        status_code=status_code,
+        json_response=json_response)
 
 
 def get_github(url, headers=None, status_code=None):
@@ -65,7 +68,7 @@ def verb_repo(verb,
               json=None,
               data=None,
               status_code=None,
-              json_response=False):
+              json_response=True):
     return verb_github(
         verb,
         f'repos/{repo}/{url}',
@@ -73,14 +76,14 @@ def verb_repo(verb,
         json=json,
         data=data,
         status_code=status_code,
-        json_response=False)
+        json_response=json_response)
 
 
 def implies(antecedent, consequent):
     return not antecedent or consequent
 
 
-verbs = set(['post', 'put', 'get'])
+verbs = set(['post', 'put', 'get', 'patch'])
 
 
 def verb_github(verb,
@@ -89,16 +92,15 @@ def verb_github(verb,
                 json=None,
                 data=None,
                 status_code=None,
-                json_response=False):
+                json_response=True):
     if isinstance(status_code, int):
         status_codes = [status_code]
     else:
         status_codes = status_code
-    assert verb in verbs
+    assert verb in verbs, f'{verb} {verbs}'
     assert implies(verb == 'post' or verb == 'put',
                    json is not None or data is not None)
     assert implies(verb == 'get', json is None and data is None)
-    assert implies(json_response == True, verb == 'get'), f'{json_response} {verb}'
     if headers is None:
         headers = {}
     if 'Authorization' in headers:
@@ -120,22 +122,32 @@ def verb_github(verb,
                     url = github_link_header_to_maybe_next(link)
         else:
             output = r.text
-    elif verb == 'post':
-        r = requests.post(
-            full_url,
-            headers=headers,
-            data=data,
-            json=json,
-            timeout=5)
-        output = r.json()
-    elif verb == 'put':
-        r = requests.put(
-            full_url,
-            headers=headers,
-            data=data,
-            json=json,
-            timeout=5)
-        output = r.json()
+    else:
+        if verb == 'post':
+            r = requests.post(
+                full_url,
+                headers=headers,
+                data=data,
+                json=json,
+                timeout=5)
+        elif verb == 'put':
+            r = requests.put(
+                full_url,
+                headers=headers,
+                data=data,
+                json=json,
+                timeout=5)
+        elif verb == 'patch':
+            r = requests.patch(
+                full_url,
+                headers=headers,
+                data=data,
+                json=json,
+                timeout=5)
+        if json_response:
+            output = r.json()
+        else:
+            output = r.text
     if status_codes and r.status_code not in status_codes:
         raise BadStatus({
             'method': verb,
