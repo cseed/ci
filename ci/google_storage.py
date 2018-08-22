@@ -10,12 +10,14 @@ gcs_client = storage.Client(project=GCP_PROJECT)
 
 
 def upload_public_gs_file_from_string(bucket, target_path, string):
-    create_public_gs_file(bucket, target_path,
+    create_public_gs_file(bucket,
+                          target_path,
                           lambda f: f.upload_from_string(string))
 
 
 def upload_public_gs_file_from_filename(bucket, target_path, filename):
-    create_public_gs_file(bucket, target_path,
+    create_public_gs_file(bucket,
+                          target_path,
                           lambda f: f.upload_from_filename(filename))
 
 

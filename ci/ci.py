@@ -15,7 +15,8 @@ import time
 
 prs = PRS()
 watched_repos = {
-    Repo(x[0], x[1])
+    Repo(x[0],
+         x[1])
     for x in (x.split('/') for x in INITIAL_WATCHED_REPOS)
 }
 
@@ -81,12 +82,14 @@ def github_pull_request_review():
             prs.review(
                 gh_pr,
                 review_status(
-                    get_reviews(gh_pr.target.ref.repo, gh_pr.number)))
+                    get_reviews(gh_pr.target.ref.repo,
+                                gh_pr.number)))
     elif action == 'dismissed':
         # FIXME: if we track all reviewers, then we don't need to talk to github
         prs.review(
             gh_pr,
-            review_status(get_reviews(gh_pr.target.ref.repo, gh_pr.number)))
+            review_status(get_reviews(gh_pr.target.ref.repo,
+                                      gh_pr.number)))
     else:
         log.info(f'ignoring pull_request_review with action {action}')
     return '', 200
@@ -198,7 +201,8 @@ def refresh_statuses(pulls_by_target):
                 'commits/' + gh_pr.source.sha + '/statuses',
                 status_code=200)
             prs.refresh_from_github_build_status(
-                gh_pr, build_state_from_gh_json(statuses))
+                gh_pr,
+                build_state_from_gh_json(statuses))
 
 
 @app.route('/heal', methods=['POST'])
@@ -215,13 +219,17 @@ def receive_job(source, target, job):
                                       f'{source.sha}/{target.sha}/job-log',
                                       job.cached_status()['log'])
     upload_public_gs_file_from_filename(
-        GCS_BUCKET, f'{source.sha}/{target.sha}/index.html', 'index.html')
+        GCS_BUCKET,
+        f'{source.sha}/{target.sha}/index.html',
+        'index.html')
     prs.build_finished(source, target, job)
 
 
 def get_reviews(repo, pr_number):
     return get_repo(
-        repo.qname, 'pulls/' + pr_number + '/reviews', status_code=200)
+        repo.qname,
+        'pulls/' + pr_number + '/reviews',
+        status_code=200)
 
 
 def polling_event_loop():
@@ -229,10 +237,12 @@ def polling_event_loop():
     while True:
         try:
             r = requests.post(
-                'http://127.0.0.1:5000/refresh_github_state', timeout=360)
+                'http://127.0.0.1:5000/refresh_github_state',
+                timeout=360)
             r.raise_for_status()
             r = requests.post(
-                'http://127.0.0.1:5000/refresh_batch_state', timeout=360)
+                'http://127.0.0.1:5000/refresh_batch_state',
+                timeout=360)
             r.raise_for_status()
             r = requests.post('http://127.0.0.1:5000/heal', timeout=360)
             r.raise_for_status()

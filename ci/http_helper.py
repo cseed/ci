@@ -24,7 +24,11 @@ def post_repo(repo, url, headers=None, json=None, data=None, status_code=None):
 
 def get_repo(repo, url, headers=None, status_code=None):
     return verb_repo(
-        'get', repo, url, headers=headers, status_code=status_code)
+        'get',
+        repo,
+        url,
+        headers=headers,
+        status_code=status_code)
 
 
 def put_repo(repo, url, headers=None, json=None, data=None, status_code=None):
@@ -76,8 +80,8 @@ def verb_github(verb,
     else:
         status_codes = status_code
     assert verb in verbs
-    assert implies(verb == 'post' or verb == 'put', json is not None
-                   or data is not None)
+    assert implies(verb == 'post' or verb == 'put',
+                   json is not None or data is not None)
     assert implies(verb == 'get', json is None and data is None)
     if headers is None:
         headers = {}
@@ -99,11 +103,19 @@ def verb_github(verb,
                 url = github_link_header_to_maybe_next(link)
     elif verb == 'post':
         r = requests.post(
-            full_url, headers=headers, data=data, json=json, timeout=5)
+            full_url,
+            headers=headers,
+            data=data,
+            json=json,
+            timeout=5)
         output = r.json()
     elif verb == 'put':
         r = requests.put(
-            full_url, headers=headers, data=data, json=json, timeout=5)
+            full_url,
+            headers=headers,
+            data=data,
+            json=json,
+            timeout=5)
         output = r.json()
     if status_codes and r.status_code not in status_codes:
         raise BadStatus({
@@ -117,7 +129,8 @@ def verb_github(verb,
             'data': data,
             'json': json,
             'github_json': output
-        }, r.status_code)
+        },
+                        r.status_code)
     else:
         if isinstance(status_code, list):
             return (output, r.status_code)

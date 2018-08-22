@@ -10,7 +10,8 @@ SELF_HOSTNAME = os.environ.get('SELF_HOSTNAME',
 BATCH_SERVER_URL = os.environ.get('BATCH_SERVER_URL',
                                   'http://set_the_BATCH_SERVER_URL/')
 REFRESH_INTERVAL_IN_SECONDS = int(
-    os.environ.get('REFRESH_INTERVAL_IN_SECONDS', 5 * 60))
+    os.environ.get('REFRESH_INTERVAL_IN_SECONDS',
+                   5 * 60))
 
 try:
     INITIAL_WATCHED_REPOS = json.loads(os.environ.get('WATCHED_REPOS', '[]'))

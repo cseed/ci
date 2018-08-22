@@ -46,7 +46,9 @@ def build_state_from_json(d):
         return NoMergeSHA(d['exit_code'], d['target_sha'])
     elif t == 'Building':
         return Building(
-            batch_client.get_job(d['job_id']), d['image'], d['target_sha'])
+            batch_client.get_job(d['job_id']),
+            d['image'],
+            d['target_sha'])
     elif t == 'Buildable':
         return Buildable(d['image'], d['target_sha'])
     else:
@@ -78,7 +80,8 @@ class Deployed(object):
         return 'success'
 
     def __eq__(self, other):
-        return (isinstance(other, Deployed) and self.job_id == other.job_id
+        return (isinstance(other,
+                           Deployed) and self.job_id == other.job_id
                 and self.merged_sha == other.merged_sha
                 and self.target_sha == other.target_sha)
 
@@ -116,7 +119,8 @@ class Deploying(object):
         return 'success'
 
     def __eq__(self, other):
-        return (isinstance(other, Deploying) and self.job_id == other.job_id
+        return (isinstance(other,
+                           Deploying) and self.job_id == other.job_id
                 and self.merged_sha == other.merged_sha
                 and self.target_sha == other.target_sha)
 
@@ -153,8 +157,8 @@ class Deployable(object):
         return 'success'
 
     def __eq__(self, other):
-        return (isinstance(other, Deployable)
-                and self.merged_sha == other.merged_sha
+        return (isinstance(other,
+                           Deployable) and self.merged_sha == other.merged_sha
                 and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
@@ -188,8 +192,8 @@ class Failure(object):
         return 'failure'
 
     def __eq__(self, other):
-        return (isinstance(other, Failure)
-                and self.exit_code == other.exit_code
+        return (isinstance(other,
+                           Failure) and self.exit_code == other.exit_code
                 and self.image == other.image
                 and self.target_sha == other.target_sha)
 
@@ -222,8 +226,8 @@ class NoMergeSHA(object):
         return 'failure'
 
     def __eq__(self, other):
-        return (isinstance(other, NoMergeSHA)
-                and self.exit_code == other.exit_code
+        return (isinstance(other,
+                           NoMergeSHA) and self.exit_code == other.exit_code
                 and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
@@ -250,9 +254,11 @@ class Building(object):
         if (isinstance(other, Deploying) or isinstance(other, Deployed)):
             raise ValueError(f'bad transition {self} to {other}')
 
-        if (not isinstance(other, Failure)
-                and not isinstance(other, Deployable)
-                and not isinstance(other, NoMergeSHA)):
+        if (not isinstance(other,
+                           Failure) and not isinstance(other,
+                                                       Deployable)
+                and not isinstance(other,
+                                   NoMergeSHA)):
             log.info(f'cancelling unneeded job {self.job.id} {self} {other}')
             try_to_cancel_job(self.job)
         return other
@@ -272,7 +278,8 @@ class Building(object):
         return 'pending'
 
     def __eq__(self, other):
-        return (isinstance(other, Building) and self.job.id == other.job.id
+        return (isinstance(other,
+                           Building) and self.job.id == other.job.id
                 and self.image == other.image
                 and self.target_sha == other.target_sha)
 
@@ -307,7 +314,8 @@ class Buildable(object):
         return 'pending'
 
     def __eq__(self, other):
-        return (isinstance(other, Buildable) and self.image == other.image
+        return (isinstance(other,
+                           Buildable) and self.image == other.image
                 and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
@@ -333,8 +341,8 @@ class NoImage(object):
         return 'failure'
 
     def __eq__(self, other):
-        return (isinstance(other, NoImage)
-                and self.target_sha == other.target_sha)
+        return (isinstance(other,
+                           NoImage) and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other

@@ -20,11 +20,13 @@ class PRS(object):
     def _get(self, source=None, target=None, default=None):
         if source is None:
             assert isinstance(target, FQRef), target
-            return self.target_source_pr.get(target, {}
+            return self.target_source_pr.get(target,
+                                             {}
                                              if default is None else default)
         elif target is None:
             assert isinstance(source, FQRef), source
-            return self.source_target_pr.get(source, {}
+            return self.source_target_pr.get(source,
+                                             {}
                                              if default is None else default)
         else:
             assert isinstance(target, FQRef) and isinstance(
@@ -98,7 +100,8 @@ class PRS(object):
             log.info(f'no PRs for target {new_target}')
         else:
             for pr in prs:
-                self._set(pr.source.ref, pr.target.ref,
+                self._set(pr.source.ref,
+                          pr.target.ref,
                           pr.update_from_github_push(new_target))
 
     def pr_push(self, gh_pr):
@@ -137,7 +140,8 @@ class PRS(object):
         if pr is None:
             log.warning(f'found new PR during review update {gh_pr}')
             pr = gh_pr.to_PR()
-        self._set(gh_pr.source.ref, gh_pr.target.ref,
+        self._set(gh_pr.source.ref,
+                  gh_pr.target.ref,
                   pr.update_from_github_review_state(state))
 
     def build_finished(self, source, target, job):
@@ -148,7 +152,8 @@ class PRS(object):
                 f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}'
             )
             return
-        self._set(source.ref, target.ref,
+        self._set(source.ref,
+                  target.ref,
                   pr.update_from_completed_batch_job(job))
 
     def refresh_from_job(self, source, target, job):
@@ -167,7 +172,8 @@ class PRS(object):
             log.warning(
                 f'found new PR during GitHub build status update {gh_pr}')
             pr = gh_pr.to_PR()
-        self._set(gh_pr.source.ref, gh_pr.target.ref,
+        self._set(gh_pr.source.ref,
+                  gh_pr.target.ref,
                   pr.update_from_github_status(status))
 
     def build(self, source, target):
@@ -181,14 +187,16 @@ class PRS(object):
     def deploy(self, pr):
         assert isinstance(pr, PR)
         log.info(f'merging {pr}')
-        (gh_response, status_code) = put_repo(
-            pr.target.ref.repo.qname,
-            f'pulls/{pr.number}/merge',
-            json={
-                'merge_method': 'squash',
-                'sha': pr.source.sha
-            },
-            status_code=[200, 409])
+        (gh_response,
+         status_code) = put_repo(
+             pr.target.ref.repo.qname,
+             f'pulls/{pr.number}/merge',
+             json={
+                 'merge_method': 'squash',
+                 'sha': pr.source.sha
+             },
+             status_code=[200,
+                          409])
         if status_code == 200:
             log.info(f'successful merge of {pr}')
             self._set(pr.source.ref, pr.target.ref, pr.merged())

@@ -8,5 +8,6 @@ setup(
     author_email='hail@broadinstitute.org',
     description='Description of my package',
     packages=find_packages(),
-    install_requires=['requests', 'flask'],
+    install_requires=['requests',
+                      'flask'],
 )

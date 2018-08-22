@@ -41,7 +41,9 @@ def try_new_build(source, target):
         try:
             job = batch_client.create_job(
                 img,
-                command=['/bin/bash', '-c', PR_BUILD_SCRIPT],
+                command=['/bin/bash',
+                         '-c',
+                         PR_BUILD_SCRIPT],
                 env={
                     'SOURCE_REPO_URL': source.ref.repo.url,
                     'SOURCE_BRANCH': source.ref.name,
@@ -104,13 +106,17 @@ def maybe_get_image(source, target):
             run(['git', 'clone', trepo.url, '.'], check=True)
         else:
             os.chdir(trepo.qname)
-        if run(['/bin/sh', '-c', f'git remote | grep -q {srepo.qname}'
-                ]).returncode != 0:
+        if run(['/bin/sh',
+                '-c',
+                f'git remote | grep -q {srepo.qname}']).returncode != 0:
             run(['git', 'remote', 'add', srepo.qname, srepo.url], check=True)
         run(['git', 'fetch', 'origin'], check=True)
         run(['git', 'fetch', srepo.qname], check=True)
         run(['git', 'checkout', target.sha], check=True)
-        run(['git', 'config', 'user.email', 'hail-ci-leader@example.com'],
+        run(['git',
+             'config',
+             'user.email',
+             'hail-ci-leader@example.com'],
             check=True)
         run(['git', 'config', 'user.name', 'hail-ci-leader'], check=True)
         run(['git', 'merge', source.sha, '-m', 'foo'], check=True)
@@ -146,7 +152,9 @@ class GitHubPR(object):
         assert 'title' in d, d
         assert 'head' in d, d
         assert 'base' in d, d
-        return GitHubPR(d['state'], str(d['number']), str(d['title']),
+        return GitHubPR(d['state'],
+                        str(d['number']),
+                        str(d['title']),
                         FQSHA.from_gh_json(d['head']),
                         FQSHA.from_gh_json(d['base']))
 
@@ -219,19 +227,25 @@ class PR(object):
 
     def _new_target_and_source(self, new_target, new_source):
         return self.copy(
-            source=new_source, target=new_target, review='pending')._new_build(
-                try_new_build(new_source, new_target))
+            source=new_source,
+            target=new_target,
+            review='pending')._new_build(
+                try_new_build(new_source,
+                              new_target))
 
     def _new_target(self, new_target):
         img = maybe_get_image(self.source, new_target)
         return self.copy(target=new_target)._new_build(
-            determine_buildability(self.source, new_target))
+            determine_buildability(self.source,
+                                   new_target))
 
     def _new_source(self, new_source):
         img = maybe_get_image(new_source, self.target)
         return self.copy(
-            source=new_source, review='pending')._new_build(
-                try_new_build(new_source, self.target))
+            source=new_source,
+            review='pending')._new_build(
+                try_new_build(new_source,
+                              self.target))
 
     def _new_build(self, new_build):
         if self.build != new_build:
@@ -304,8 +318,8 @@ class PR(object):
         }
 
     def is_mergeable(self):
-        return (isinstance(self.build, Deployable)
-                and self.review == 'approved')
+        return (isinstance(self.build,
+                           Deployable) and self.review == 'approved')
 
     def is_approved(self):
         return self.review == 'approved'
@@ -330,7 +344,8 @@ class PR(object):
         assert self.source.ref == gh_pr.source.ref
         # this will build new PRs when the server restarts
         result = self._maybe_new_shas(
-            new_source=gh_pr.source, new_target=gh_pr.target)
+            new_source=gh_pr.source,
+            new_target=gh_pr.target)
         if self.title != gh_pr.title:
             log.info(f'found new title from github {gh_pr.title} {self}')
             result = result.copy(title=gh_pr.title)
@@ -403,4 +418,6 @@ class PR(object):
         else:
             log.info(f'job finished failure {job.id} {job.attributes} {self}')
             return self._new_build(
-                Failure(exit_code, job.attributes['image'], self.target.sha))
+                Failure(exit_code,
+                        job.attributes['image'],
+                        self.target.sha))

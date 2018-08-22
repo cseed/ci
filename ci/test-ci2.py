@@ -44,7 +44,9 @@ def ci_post(endpoint, json=None, status_code=None, json_response=True):
         raise ValueError(
             'bad status_code from pull_request: {status_code}\n{message}'.
             format(
-                endpoint=endpoint, status_code=r.status_code, message=r.text))
+                endpoint=endpoint,
+                status_code=r.status_code,
+                message=r.text))
     if json_response:
         return r.json()
     else:
@@ -56,7 +58,9 @@ def ci_get(endpoint, status_code=None, json_response=True):
     if status_code and r.status_code != status_code:
         raise ValueError(
             'bad status_code from {endpoint}: {status_code}\n{message}'.format(
-                endpoint=endpoint, status_code=r.status_code, message=r.text))
+                endpoint=endpoint,
+                status_code=r.status_code,
+                message=r.text))
     if json_response:
         return r.json()
     else:
@@ -139,7 +143,8 @@ def modify_repo(verb,
             'json': json,
             'message': 'github error',
             'github_json': r.json()
-        }, r.status_code)
+        },
+                        r.status_code)
     elif json_response:
         return r.json()
     else:
@@ -178,7 +183,8 @@ def get_github(url,
             'status_code': r.status_code,
             'message': 'github error',
             'github_json': r.json()
-        }, r.status_code)
+        },
+                        r.status_code)
     elif json_response:
         return r.json()
     else:
@@ -296,8 +302,10 @@ class TestCI(unittest.TestCase):
                              source_ref,
                              delay_in_seconds=DELAY_IN_SECONDS,
                              max_polls=MAX_POLLS):
-        return self.poll_until_pr_exists(source_ref, lambda x: True,
-                                         delay_in_seconds, max_polls)
+        return self.poll_until_pr_exists(source_ref,
+                                         lambda x: True,
+                                         delay_in_seconds,
+                                         max_polls)
 
     def poll_until_pr_exists_and(self,
                                  source_ref,
@@ -326,10 +334,11 @@ class TestCI(unittest.TestCase):
             try:
                 status = ci_get('/status', status_code=200)
                 self.assertIn('watched_repos', status)
-                self.assertEqual(status['watched_repos'], [{
-                    'name': 'ci-test',
-                    'owner': 'hail-is'
-                }])
+                self.assertEqual(status['watched_repos'],
+                                 [{
+                                     'name': 'ci-test',
+                                     'owner': 'hail-is'
+                                 }])
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
@@ -339,10 +348,14 @@ class TestCI(unittest.TestCase):
                 call(['git', 'commit', '--allow-empty', '-m', 'foo'])
                 call(['git', 'push', 'origin', BRANCH_NAME])
                 source_sha = run(
-                    ['git', 'rev-parse', BRANCH_NAME],
+                    ['git',
+                     'rev-parse',
+                     BRANCH_NAME],
                     stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
                 target_sha = run(
-                    ['git', 'rev-parse', 'master'],
+                    ['git',
+                     'rev-parse',
+                     'master'],
                     stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
                 data = post_repo(
                     'hail-is/ci-test',
@@ -357,7 +370,8 @@ class TestCI(unittest.TestCase):
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
                 assertDictHasKVs(
-                    pr.to_json(), {
+                    pr.to_json(),
+                    {
                         "target": {
                             "ref": {
                                 "repo": {
@@ -419,7 +433,9 @@ class TestCI(unittest.TestCase):
     def push(self, ref):
         call(['git', 'push', 'origin', ref])
         return run(
-            ['git', 'rev-parse', ref],
+            ['git',
+             'rev-parse',
+             ref],
             stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
 
     def approve(self, pr_number, sha):
@@ -435,7 +451,9 @@ class TestCI(unittest.TestCase):
 
     def rev_parse(self, ref):
         return run(
-            ['git', 'rev-parse', ref],
+            ['git',
+             'rev-parse',
+             ref],
             stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
 
     def test_push_while_building(self):
@@ -468,14 +486,17 @@ class TestCI(unittest.TestCase):
                 call(['git', 'commit', '-m', 'foo'])
                 source_sha[SLOW_BRANCH_NAME] = self.push(SLOW_BRANCH_NAME)
                 gh_pr[SLOW_BRANCH_NAME] = self.create_pull_request(
-                    'foo', SLOW_BRANCH_NAME)
+                    'foo',
+                    SLOW_BRANCH_NAME)
                 pr_number[SLOW_BRANCH_NAME] = gh_pr[SLOW_BRANCH_NAME]['number']
 
                 # get details on first job of slow branch
                 pr[SLOW_BRANCH_NAME] = self.poll_until_pr_exists_and(
-                    SLOW_BRANCH_NAME, lambda x: x.is_running())
+                    SLOW_BRANCH_NAME,
+                    lambda x: x.is_running())
                 assertDictHasKVs(
-                    pr[SLOW_BRANCH_NAME].to_json(), {
+                    pr[SLOW_BRANCH_NAME].to_json(),
+                    {
                         "target": {
                             "ref": {
                                 "repo": {
@@ -510,14 +531,16 @@ class TestCI(unittest.TestCase):
                 source_sha[BRANCH_NAME] = self.create_and_push_empty_commit(
                     BRANCH_NAME)
                 gh_pr[BRANCH_NAME] = self.create_pull_request(
-                    'foo', BRANCH_NAME)
+                    'foo',
+                    BRANCH_NAME)
                 pr_number[BRANCH_NAME] = gh_pr[BRANCH_NAME]['number']
                 self.approve(pr_number[BRANCH_NAME], source_sha[BRANCH_NAME])
 
                 # wait for fast branch to finish and merge
                 pr[BRANCH_NAME] = self.poll_until_merged_pr(BRANCH_NAME)
                 assertDictHasKVs(
-                    pr[BRANCH_NAME].to_json(), {
+                    pr[BRANCH_NAME].to_json(),
+                    {
                         "target": {
                             "ref": {
                                 "repo": {
@@ -554,7 +577,8 @@ class TestCI(unittest.TestCase):
                 # slow branch should be running again with the new target sha
                 pr[SLOW_BRANCH_NAME] = self.get_pr(SLOW_BRANCH_NAME)
                 assertDictHasKVs(
-                    pr[SLOW_BRANCH_NAME].to_json(), {
+                    pr[SLOW_BRANCH_NAME].to_json(),
+                    {
                         "target": {
                             "ref": {
                                 "repo": {
@@ -588,7 +612,8 @@ class TestCI(unittest.TestCase):
                 pr[SLOW_BRANCH_NAME] = self.poll_until_finished_pr(
                     SLOW_BRANCH_NAME)
                 assertDictHasKVs(
-                    pr[SLOW_BRANCH_NAME].to_json(), {
+                    pr[SLOW_BRANCH_NAME].to_json(),
+                    {
                         "target": {
                             "ref": {
                                 "repo": {
@@ -634,10 +659,11 @@ class TestCI(unittest.TestCase):
             try:
                 status = ci_get('/status', status_code=200)
                 self.assertIn('watched_repos', status)
-                self.assertEqual(status['watched_repos'], [{
-                    'name': 'ci-test',
-                    'owner': 'hail-is'
-                }])
+                self.assertEqual(status['watched_repos'],
+                                 [{
+                                     'name': 'ci-test',
+                                     'owner': 'hail-is'
+                                 }])
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
@@ -647,10 +673,14 @@ class TestCI(unittest.TestCase):
                 call(['git', 'commit', '--allow-empty', '-m', 'foo'])
                 call(['git', 'push', 'origin', BRANCH_NAME])
                 source_sha = run(
-                    ['git', 'rev-parse', BRANCH_NAME],
+                    ['git',
+                     'rev-parse',
+                     BRANCH_NAME],
                     stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
                 target_sha = run(
-                    ['git', 'rev-parse', 'master'],
+                    ['git',
+                     'rev-parse',
+                     'master'],
                     stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
                 gh_pr = post_repo(
                     'hail-is/ci-test',
@@ -678,7 +708,8 @@ class TestCI(unittest.TestCase):
                 time.sleep(7)
                 pr = self.poll_until_finished_pr(BRANCH_NAME)
                 assertDictHasKVs(
-                    pr.to_json(), {
+                    pr.to_json(),
+                    {
                         "target": {
                             "ref": {
                                 "repo": {
@@ -701,7 +732,8 @@ class TestCI(unittest.TestCase):
                         },
                         "review": "pending",
                         "build": {
-                            "type": Match.any('Deployable', 'Deployed'),
+                            "type": Match.any('Deployable',
+                                              'Deployed'),
                             "target_sha": target_sha
                         },
                         "number": pr_number
