@@ -2,7 +2,7 @@ from batch.client import *
 from build_state import *
 from ci_logging import log
 from constants import *
-from git_state import *
+from git_state import FQSHA
 from http_helper import *
 from real_constants import *
 from sentinel import *
@@ -299,8 +299,8 @@ class PR(object):
         assert 'number' in d, d
         assert 'title' in d, d
         return PR(
-            FQSHA.from_json(d['target']),
             FQSHA.from_json(d['source']),
+            FQSHA.from_json(d['target']),
             d['review'],
             build_state_from_json(d['build']),
             d['number'],
