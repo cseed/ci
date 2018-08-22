@@ -5,9 +5,12 @@ import batch
 import json
 import os
 
-SELF_HOSTNAME = os.environ.get('SELF_HOSTNAME', 'http://set_the_SELF_HOSTNAME/')
-BATCH_SERVER_URL = os.environ.get('BATCH_SERVER_URL', 'http://set_the_BATCH_SERVER_URL/')
-REFRESH_INTERVAL_IN_SECONDS = int(os.environ.get('REFRESH_INTERVAL_IN_SECONDS', 5 * 60))
+SELF_HOSTNAME = os.environ.get('SELF_HOSTNAME',
+                               'http://set_the_SELF_HOSTNAME/')
+BATCH_SERVER_URL = os.environ.get('BATCH_SERVER_URL',
+                                  'http://set_the_BATCH_SERVER_URL/')
+REFRESH_INTERVAL_IN_SECONDS = int(
+    os.environ.get('REFRESH_INTERVAL_IN_SECONDS', 5 * 60))
 
 try:
     INITIAL_WATCHED_REPOS = json.loads(os.environ.get('WATCHED_REPOS', '[]'))
@@ -22,16 +25,14 @@ try:
 except FileNotFoundError as e:
     raise ValueError(
         "working directory must contain a file called `pr-build-script' "
-        "containing a string that is passed to `/bin/sh -c'"
-    ) from e
+        "containing a string that is passed to `/bin/sh -c'") from e
 try:
     with open('oauth-token/oauth-token', 'r') as f:
         oauth_token = f.read()
 except FileNotFoundError as e:
     raise ValueError(
         "working directory must contain `oauth-token/oauth-token' "
-        "containing a valid GitHub oauth token"
-    ) from e
+        "containing a valid GitHub oauth token") from e
 
 log.info(f'BATCH_SERVER_URL {BATCH_SERVER_URL}')
 log.info(f'SELF_HOSTNAME {SELF_HOSTNAME}')

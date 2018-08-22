@@ -1,10 +1,12 @@
 import requests
 
+
 def try_to_cancel_job(job):
     try:
         job.cancel()
     except requests.exceptions.HTTPError as e:
         log.warning(f'could not cancel job {job.id} due to {e}')
+
 
 # job_ordering(x, y) > 0 if x is closer to finishing or has a larger id
 def job_ordering(job1, job2):

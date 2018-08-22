@@ -6,6 +6,7 @@ from real_constants import *
 import json
 import re
 
+
 def build_state_from_gh_json(d):
     assert isinstance(d, list), d
     assert all([isinstance(x, dict) for x in d]), d
@@ -13,7 +14,9 @@ def build_state_from_gh_json(d):
     if len(my_statuses) != 0:
         latest_status = my_statuses[0]
         state = latest_status['state']
-        assert state in ['pending', 'failure', 'success'], state # 'error' is allowed by github but not used by me
+        assert state in [
+            'pending', 'failure', 'success'
+        ], state  # 'error' is allowed by github but not used by me
         description = latest_status['description']
         try:
             matches = re.findall(r'({.*})$', description)
@@ -28,6 +31,7 @@ def build_state_from_gh_json(d):
     else:
         return Unknown()
 
+
 def build_state_from_json(d):
     t = d['type']
     if t == 'Deployed':
@@ -41,12 +45,14 @@ def build_state_from_json(d):
     elif t == 'NoMergeSHA':
         return NoMergeSHA(d['exit_code'], d['target_sha'])
     elif t == 'Building':
-        return Building(batch_client.get_job(d['job_id']), d['image'], d['target_sha'])
+        return Building(
+            batch_client.get_job(d['job_id']), d['image'], d['target_sha'])
     elif t == 'Buildable':
         return Buildable(d['image'], d['target_sha'])
     else:
         assert t == 'Unknown'
         return Unknown()
+
 
 class Deployed(object):
     def __init__(self, job_id, merged_sha, target_sha):
@@ -72,15 +78,13 @@ class Deployed(object):
         return 'success'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Deployed) and
-            self.job_id == other.job_id and
-            self.merged_sha == other.merged_sha and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, Deployed) and self.job_id == other.job_id
+                and self.merged_sha == other.merged_sha
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class Deploying(object):
     def __init__(self, job_id, merged_sha, target_sha):
@@ -112,15 +116,13 @@ class Deploying(object):
         return 'success'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Deploying) and
-            self.job_id == other.job_id and
-            self.merged_sha == other.merged_sha and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, Deploying) and self.job_id == other.job_id
+                and self.merged_sha == other.merged_sha
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class Deployable(object):
     def __init__(self, merged_sha, target_sha):
@@ -132,7 +134,9 @@ class Deployable(object):
 
     def transition(self, other):
         if not isinstance(other, Deploying):
-            log.warning(f'usually deployable should go to Deploying, but going to {other}')
+            log.warning(
+                f'usually deployable should go to Deploying, but going to {other}'
+            )
         return other
 
     def __str__(self):
@@ -149,14 +153,13 @@ class Deployable(object):
         return 'success'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Deployable) and
-            self.merged_sha == other.merged_sha and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, Deployable)
+                and self.merged_sha == other.merged_sha
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class Failure(object):
     def __init__(self, exit_code, image, target_sha):
@@ -185,15 +188,14 @@ class Failure(object):
         return 'failure'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Failure) and
-            self.exit_code == other.exit_code and
-            self.image == other.image and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, Failure)
+                and self.exit_code == other.exit_code
+                and self.image == other.image
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class NoMergeSHA(object):
     def __init__(self, exit_code, target_sha):
@@ -220,14 +222,13 @@ class NoMergeSHA(object):
         return 'failure'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, NoMergeSHA) and
-            self.exit_code == other.exit_code and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, NoMergeSHA)
+                and self.exit_code == other.exit_code
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class Building(object):
     def __init__(self, job, image, target_sha):
@@ -246,13 +247,12 @@ class Building(object):
         return NoMergeSHA(exit_code, self.target_sha)
 
     def transition(self, other):
-        if (isinstance(other, Deploying) or
-            isinstance(other, Deployed)):
+        if (isinstance(other, Deploying) or isinstance(other, Deployed)):
             raise ValueError(f'bad transition {self} to {other}')
 
-        if (not isinstance(other, Failure) and
-            not isinstance(other, Deployable) and
-            not isinstance(other, NoMergeSHA)):
+        if (not isinstance(other, Failure)
+                and not isinstance(other, Deployable)
+                and not isinstance(other, NoMergeSHA)):
             log.info(f'cancelling unneeded job {self.job.id} {self} {other}')
             try_to_cancel_job(self.job)
         return other
@@ -272,15 +272,13 @@ class Building(object):
         return 'pending'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Building) and
-            self.job.id == other.job.id and
-            self.image == other.image and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, Building) and self.job.id == other.job.id
+                and self.image == other.image
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class Buildable(object):
     def __init__(self, image, target_sha):
@@ -309,14 +307,12 @@ class Buildable(object):
         return 'pending'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, Buildable) and
-            self.image == other.image and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, Buildable) and self.image == other.image
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class NoImage(object):
     def __init__(self, target_sha):
@@ -331,22 +327,18 @@ class NoImage(object):
         return f'no hail-ci-build-image found'
 
     def to_json(self):
-        return {
-            'type': 'NoImage',
-            'target_sha': self.target_sha
-        }
+        return {'type': 'NoImage', 'target_sha': self.target_sha}
 
     def gh_state(self):
         return 'failure'
 
     def __eq__(self, other):
-        return (
-            isinstance(other, NoImage) and
-            self.target_sha == other.target_sha
-        )
+        return (isinstance(other, NoImage)
+                and self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
+
 
 class Unknown(object):
     def __init__(self):
@@ -362,9 +354,7 @@ class Unknown(object):
         return 'unknown build state'
 
     def to_json(self):
-        return {
-            'type': 'Unknown'
-        }
+        return {'type': 'Unknown'}
 
     def gh_state(self):
         raise ValueError('do not use Unknown to update github')

@@ -1,6 +1,7 @@
 from real_constants import *
 import json
 
+
 class Repo(object):
     def __init__(self, owner, name):
         assert isinstance(owner, str)
@@ -30,10 +31,7 @@ class Repo(object):
         return Repo(d['owner'], d['name'])
 
     def to_json(self):
-        return {
-            'owner': self.owner,
-            'name': self.name
-        }
+        return {'owner': self.owner, 'name': self.name}
 
     @staticmethod
     def from_gh_json(d):
@@ -42,6 +40,7 @@ class Repo(object):
         assert 'login' in d['owner'], d
         assert 'name' in d, d
         return Repo(d['owner']['login'], d['name'])
+
 
 class FQRef(object):
     def __init__(self, repo, name):
@@ -70,10 +69,8 @@ class FQRef(object):
         return FQRef(Repo.from_json(d['repo']), d['name'])
 
     def to_json(self):
-        return {
-            'repo': self.repo.to_json(),
-            'name': self.name
-        }
+        return {'repo': self.repo.to_json(), 'name': self.name}
+
 
 class FQSHA(object):
     def __init__(self, ref, sha):
@@ -97,9 +94,7 @@ class FQSHA(object):
         assert 'repo' in d, d
         assert 'ref' in d, d
         assert 'sha' in d, d
-        return FQSHA(FQRef(Repo.from_gh_json(d['repo']),
-                           d['ref']),
-                     d['sha'])
+        return FQSHA(FQRef(Repo.from_gh_json(d['repo']), d['ref']), d['sha'])
 
     def __str__(self):
         return json.dumps(self.to_json())
@@ -112,8 +107,4 @@ class FQSHA(object):
         return FQSHA(FQRef.from_json(d['ref']), d['sha'])
 
     def to_json(self):
-        return {
-            'ref': self.ref.to_json(),
-            'sha': self.sha
-        }
-
+        return {'ref': self.ref.to_json(), 'sha': self.sha}

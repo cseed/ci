@@ -1,6 +1,7 @@
 from pr import *
 import json
 
+
 class PRS(object):
     def __init__(self):
         self.target_source_pr = {}
@@ -19,12 +20,15 @@ class PRS(object):
     def _get(self, source=None, target=None, default=None):
         if source is None:
             assert isinstance(target, FQRef), target
-            return self.target_source_pr.get(target, {} if default is None else default)
+            return self.target_source_pr.get(target, {}
+                                             if default is None else default)
         elif target is None:
             assert isinstance(source, FQRef), source
-            return self.source_target_pr.get(source, {} if default is None else default)
+            return self.source_target_pr.get(source, {}
+                                             if default is None else default)
         else:
-            assert isinstance(target, FQRef) and isinstance(source, FQRef), f'{target} {source}'
+            assert isinstance(target, FQRef) and isinstance(
+                source, FQRef), f'{target} {source}'
             return self.target_source_pr.get(target, {}).get(source, default)
 
     def _pop(self, source, target):
@@ -38,8 +42,7 @@ class PRS(object):
 
     def to_json(self):
         return [
-            y.to_json()
-            for x in self.target_source_pr.values()
+            y.to_json() for x in self.target_source_pr.values()
             for y in x.values()
         ]
 
@@ -53,11 +56,7 @@ class PRS(object):
         return self.target_source_pr.get(target, {}).values()
 
     def ready_to_merge(self, target):
-        return [
-            pr
-            for pr in self.for_target(target)
-            if pr.is_mergeable()
-        ]
+        return [pr for pr in self.for_target(target) if pr.is_mergeable()]
 
     def heal(self):
         for target in self.live_targets():
@@ -73,26 +72,24 @@ class PRS(object):
             self.build_next(target)
 
     def build_next(self, target):
-        approved = [
-            pr
-            for pr in self.for_target(target)
-            if pr.is_approved()
-        ]
+        approved = [pr for pr in self.for_target(target) if pr.is_approved()]
         running = [x for x in approved if x.is_running()]
         if len(running) != 0:
             to_build = []
         else:
-            approved_and_need_status = [x for x in approved if x.is_pending_build()]
+            approved_and_need_status = [
+                x for x in approved if x.is_pending_build()
+            ]
             if len(approved_and_need_status) != 0:
                 to_build = [approved_and_need_status[-1]]
             else:
-                all_pending_prs = [x for x in self.for_target(target) if x.is_pending_build()]
+                all_pending_prs = [
+                    x for x in self.for_target(target) if x.is_pending_build()
+                ]
                 to_build = all_pending_prs
         log.info(f'next to build: {to_build}')
         for pr in to_build:
-            self._set(pr.source.ref,
-                      pr.target.ref,
-                      pr.build_it())
+            self._set(pr.source.ref, pr.target.ref, pr.build_it())
 
     def push(self, new_target):
         assert isinstance(new_target, FQSHA), new_target
@@ -101,8 +98,7 @@ class PRS(object):
             log.info(f'no PRs for target {new_target}')
         else:
             for pr in prs:
-                self._set(pr.source.ref,
-                          pr.target.ref,
+                self._set(pr.source.ref, pr.target.ref,
                           pr.update_from_github_push(new_target))
 
     def pr_push(self, gh_pr):
@@ -141,37 +137,37 @@ class PRS(object):
         if pr is None:
             log.warning(f'found new PR during review update {gh_pr}')
             pr = gh_pr.to_PR()
-        self._set(gh_pr.source.ref,
-                  gh_pr.target.ref,
+        self._set(gh_pr.source.ref, gh_pr.target.ref,
                   pr.update_from_github_review_state(state))
 
     def build_finished(self, source, target, job):
         assert isinstance(job, Job), job
         pr = self._get(source.ref, target.ref)
         if pr is None:
-            log.warning(f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}')
+            log.warning(
+                f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}'
+            )
             return
-        self._set(source.ref,
-                  target.ref,
+        self._set(source.ref, target.ref,
                   pr.update_from_completed_batch_job(job))
 
     def refresh_from_job(self, source, target, job):
         assert isinstance(job, Job), job
         pr = self._get(source.ref, target.ref)
         if pr is None:
-            log.warning(f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}')
+            log.warning(
+                f'ignoring job {job.id} {job.attributes} for unknown {source} and {target}'
+            )
             return
-        self._set(source.ref,
-                  target.ref,
-                  pr.refresh_from_batch_job(job))
+        self._set(source.ref, target.ref, pr.refresh_from_batch_job(job))
 
     def refresh_from_github_build_status(self, gh_pr, status):
         pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
         if pr is None:
-            log.warning(f'found new PR during GitHub build status update {gh_pr}')
+            log.warning(
+                f'found new PR during GitHub build status update {gh_pr}')
             pr = gh_pr.to_PR()
-        self._set(gh_pr.source.ref,
-                  gh_pr.target.ref,
+        self._set(gh_pr.source.ref, gh_pr.target.ref,
                   pr.update_from_github_status(status))
 
     def build(self, source, target):
@@ -192,8 +188,7 @@ class PRS(object):
                 'merge_method': 'squash',
                 'sha': pr.source.sha
             },
-            status_code=[200, 409]
-        )
+            status_code=[200, 409])
         if status_code == 200:
             log.info(f'successful merge of {pr}')
             self._set(pr.source.ref, pr.target.ref, pr.merged())
@@ -205,4 +200,3 @@ class PRS(object):
                 f'if necessary')
             self.forget(pr)
         # FIXME: eagerly update statuses for all PRs targeting this branch
-

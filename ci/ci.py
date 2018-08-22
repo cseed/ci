@@ -14,7 +14,10 @@ import threading
 import time
 
 prs = PRS()
-watched_repos = {Repo(x[0], x[1]) for x in (x.split('/') for x in INITIAL_WATCHED_REPOS)}
+watched_repos = {
+    Repo(x[0], x[1])
+    for x in (x.split('/') for x in INITIAL_WATCHED_REPOS)
+}
 
 app = Flask(__name__)
 
@@ -42,7 +45,9 @@ def github_push():
         target = FQSHA(target_ref, d['after'])
         prs.push(target)
     else:
-        log.info(f'ignoring ref push {ref} because it does not start with "refs/heads/"')
+        log.info(
+            f'ignoring ref push {ref} because it does not start with "refs/heads/"'
+        )
     return '', 200
 
 
@@ -73,12 +78,15 @@ def github_pull_request_review():
             prs.review(gh_pr, state)
         else:
             # FIXME: if we track all reviewers, then we don't need to talk to github
-            prs.review(gh_pr, review_status(get_reviews(gh_pr.target.ref.repo,
-                                                        gh_pr.number)))
+            prs.review(
+                gh_pr,
+                review_status(
+                    get_reviews(gh_pr.target.ref.repo, gh_pr.number)))
     elif action == 'dismissed':
         # FIXME: if we track all reviewers, then we don't need to talk to github
-        prs.review(gh_pr, review_status(get_reviews(gh_pr.target.ref.repo,
-                                                    gh_pr.number)))
+        prs.review(
+            gh_pr,
+            review_status(get_reviews(gh_pr.target.ref.repo, gh_pr.number)))
     else:
         log.info(f'ignoring pull_request_review with action {action}')
     return '', 200
@@ -112,11 +120,15 @@ def refresh_batch_state():
                     latest_jobs[key] = job
                 else:
                     if job_ordering(job, job2) > 0:
-                        log.info(f'cancelling {job2.id}, preferring {job.id}, {job2.attributes} {job.attributes} ')
+                        log.info(
+                            f'cancelling {job2.id}, preferring {job.id}, {job2.attributes} {job.attributes} '
+                        )
                         try_to_cancel_job(job2)
                         latest_jobs[key] = job
                     else:
-                        log.info(f'cancelling {job.id}, preferring {job2.id}, {job2.attributes} {job.attributes} ')
+                        log.info(
+                            f'cancelling {job.id}, preferring {job2.id}, {job2.attributes} {job.attributes} '
+                        )
                         try_to_cancel_job(job)
     for ((source, target), job) in latest_jobs.items():
         prs.refresh_from_job(source, target, job)
@@ -146,7 +158,8 @@ def refresh_github_state():
             # FIXME: I can't fit statuses in the messages
             # refresh_statuses(pulls_by_target)
         except Exception as e:
-            log.exception(f'could not refresh state for {target_repo} due to {e}')
+            log.exception(
+                f'could not refresh state for {target_repo} due to {e}')
     return '', 200
 
 
@@ -157,10 +170,10 @@ def refresh_pulls(pulls_by_target):
     for (target_ref, pulls) in pulls_by_target.items():
         for gh_pr in pulls:
             prs.pr_push(gh_pr)
-        dead_prs = (
-            {x.source.ref for x in prs.for_target(target_ref)} -
-            {x.source.ref for x in pulls}
-        )
+        dead_prs = ({x.source.ref
+                     for x in prs.for_target(target_ref)} -
+                    {x.source.ref
+                     for x in pulls})
         for source_ref in dead_prs:
             prs.forget(source_ref, target_ref)
     return pulls_by_target
@@ -172,8 +185,7 @@ def refresh_reviews(pulls_by_target):
             reviews = get_repo(
                 gh_pr.target.ref.repo.qname,
                 'pulls/' + gh_pr.number + '/reviews',
-                status_code=200
-            )
+                status_code=200)
             state = overall_review_state(reviews)['state']
             prs.review(gh_pr, state)
 
@@ -184,12 +196,9 @@ def refresh_statuses(pulls_by_target):
             statuses = get_repo(
                 gh_pr.target.ref.repo.qname,
                 'commits/' + gh_pr.source.sha + '/statuses',
-                status_code=200
-            )
+                status_code=200)
             prs.refresh_from_github_build_status(
-                gh_pr,
-                build_state_from_gh_json(statuses)
-            )
+                gh_pr, build_state_from_gh_json(statuses))
 
 
 @app.route('/heal', methods=['POST'])
@@ -197,38 +206,33 @@ def heal():
     prs.heal()
     return '', 200
 
+
 ###############################################################################
 
 
 def receive_job(source, target, job):
-    upload_public_gs_file_from_string(
-        GCS_BUCKET,
-        f'{source.sha}/{target.sha}/job-log',
-        job.cached_status()['log']
-    )
+    upload_public_gs_file_from_string(GCS_BUCKET,
+                                      f'{source.sha}/{target.sha}/job-log',
+                                      job.cached_status()['log'])
     upload_public_gs_file_from_filename(
-        GCS_BUCKET,
-        f'{source.sha}/{target.sha}/index.html',
-        'index.html'
-    )
+        GCS_BUCKET, f'{source.sha}/{target.sha}/index.html', 'index.html')
     prs.build_finished(source, target, job)
 
 
 def get_reviews(repo, pr_number):
     return get_repo(
-        repo.qname,
-        'pulls/' + pr_number + '/reviews',
-        status_code=200
-    )
+        repo.qname, 'pulls/' + pr_number + '/reviews', status_code=200)
 
 
 def polling_event_loop():
     time.sleep(1)
     while True:
         try:
-            r = requests.post('http://127.0.0.1:5000/refresh_github_state', timeout=360)
+            r = requests.post(
+                'http://127.0.0.1:5000/refresh_github_state', timeout=360)
             r.raise_for_status()
-            r = requests.post('http://127.0.0.1:5000/refresh_batch_state', timeout=360)
+            r = requests.post(
+                'http://127.0.0.1:5000/refresh_batch_state', timeout=360)
             r.raise_for_status()
             r = requests.post('http://127.0.0.1:5000/heal', timeout=360)
             r.raise_for_status()
