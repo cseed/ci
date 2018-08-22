@@ -380,6 +380,8 @@ class PR(object):
             log.info(f'review state changing from {self.review} to {review} {self}')
             # FIXME: start deploy flow if approved and success
             return self.copy(review=review)
+        else:
+            return self
 
     def update_from_github_status(self, build):
         if isinstance(self.build, Unknown):
