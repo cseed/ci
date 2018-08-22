@@ -4,8 +4,8 @@ from build_state import \
     build_state_from_json
 from ci_logging import log
 from constants import *
-from git_state import FQSHA
-from http_helper import *
+from git_state import FQSHA, FQRef
+from http_helper import get_repo, post_repo, BadStatus
 from real_constants import *
 from sentinel import Sentinel
 from subprocess import run, CalledProcessError
@@ -136,20 +136,22 @@ def maybe_get_image(source, target):
 
 
 class GitHubPR(object):
-    def __init__(self, state, number, title, source, target):
+    def __init__(self, state, number, title, source, target_ref, target_sha=None):
         assert state in ['closed', 'open']
-        assert isinstance(number, str)
-        assert isinstance(title, str)
-        assert isinstance(source, FQSHA)
-        assert isinstance(target, FQSHA)
+        assert isinstance(number, str), f'{type(number)} {number}'
+        assert isinstance(title, str), f'{type(title)} {title}'
+        assert isinstance(source, FQSHA), f'{type(source)} {source}'
+        assert isinstance(target_ref, FQRef), f'{type(target_ref)} {target_ref}'
+        assert target_sha is None or isinstance(target_sha, str), f'{type(target_sha)} {target_sha}'
         self.state = state
         self.number = number
         self.title = title
         self.source = source
-        self.target = target
+        self.target_ref = target_ref
+        self.target_sha = target_sha
 
     @staticmethod
-    def from_gh_json(d):
+    def from_gh_json(d, target_sha=None):
         assert 'state' in d, d
         assert 'number' in d, d
         assert 'title' in d, d
@@ -159,7 +161,9 @@ class GitHubPR(object):
                         str(d['number']),
                         str(d['title']),
                         FQSHA.from_gh_json(d['head']),
-                        FQSHA.from_gh_json(d['base']))
+                        FQSHA.from_gh_json(d['base']).ref,
+                        target_sha)
+
 
     def __str__(self):
         return json.dumps(self.to_json())
@@ -170,11 +174,24 @@ class GitHubPR(object):
             'number': self.number,
             'title': self.title,
             'source': self.source.to_json(),
-            'target': self.target.to_json()
+            'target_ref': self.target_ref.to_json(),
+            'target_sha': self.target_sha
         }
 
     def to_PR(self, start_build=False):
-        pr = PR.fresh(self.source, self.target, self.number, self.title)
+        if self.target_sha is None:
+            d = get_repo(
+                self.target_ref.repo.qname,
+                f'git/refs/heads/{self.target_ref.name}',
+                status_code=200
+            )
+            assert 'object' in d, d
+            assert 'sha' in d['object'], d
+            target_sha = d['object']['sha']
+        else:
+            target_sha = self.target_sha
+        target = FQSHA(self.target_ref, target_sha)
+        pr = PR.fresh(self.source, target, self.number, self.title)
         if start_build:
             return pr.build_it()
         else:
@@ -213,6 +230,7 @@ class PR(object):
             title=self.title if title is PR.keep else title)
 
     def _maybe_new_shas(self, new_source=None, new_target=None):
+        assert new_source is not None or new_target is not None
         if new_source and self.source != new_source:
             assert not self.is_deployed()
             if new_target and self.target != new_target:
@@ -221,15 +239,10 @@ class PR(object):
                 )
                 return self._new_target_and_source(new_target, new_source)
             else:
-                assert new_source is not None
-                if self.source != new_source:
-                    log.info(f'new source sha {new_source} {self}')
-                    return self._new_source(new_source)
-                else:
-                    return self
+                log.info(f'new source sha {new_source} {self}')
+                return self._new_source(new_source)
         else:
-            assert new_target is not None
-            if self.target != new_target:
+            if new_target and self.target != new_target:
                 if not self.is_deployed():
                     log.info(f'new target sha {new_target} {self}')
                     return self._new_target(new_target)
@@ -245,6 +258,7 @@ class PR(object):
             target=new_target,
             review='pending'
         )._new_build(
+            # FIXME: if I already have an image, just use it
             try_new_build(new_source, new_target)
         )
 
@@ -260,15 +274,19 @@ class PR(object):
             source=new_source,
             review='pending'
         )._new_build(
+            # FIXME: if I already have an image, just use it
             try_new_build(new_source, self.target)
         )
 
     def _new_build(self, new_build):
         if self.build != new_build:
             self.notify_github(new_build)
-        return self.copy(build=self.build.transition(new_build))
+            return self.copy(build=self.build.transition(new_build))
+        else:
+            return self
 
     def build_it(self):
+        # FIXME: if I already have an image, just use it
         return self._new_build(try_new_build(self.source, self.target))
 
     # FIXME: this should be a verb
@@ -361,12 +379,15 @@ class PR(object):
 
     def update_from_github_pr(self, gh_pr):
         assert isinstance(gh_pr, GitHubPR)
-        assert self.target.ref == gh_pr.target.ref
+        assert self.target.ref == gh_pr.target_ref
         assert self.source.ref == gh_pr.source.ref
         # this will build new PRs when the server restarts
-        result = self._maybe_new_shas(
-            new_source=gh_pr.source,
-            new_target=gh_pr.target)
+        if gh_pr.target_sha:
+            result = self._maybe_new_shas(
+                new_source=gh_pr.source,
+                new_target=gh_pr.target)
+        else:
+            result = self._maybe_new_shas(new_source=gh_pr.source)
         if self.title != gh_pr.title:
             log.info(f'found new title from github {gh_pr.title} {self}')
             result = result.copy(title=gh_pr.title)
@@ -415,7 +436,10 @@ class PR(object):
             assert 'image' in job.attributes, job.attributes
             target = FQSHA.from_json(json.loads(job.attributes['target']))
             image = job.attributes['image']
-            return self._new_build(Building(job, image, target.sha))
+            if target == self.target:
+                return self._new_build(Building(job, image, target.sha))
+            else:
+                return self
 
     def update_from_completed_batch_job(self, job):
         assert isinstance(job, Job)

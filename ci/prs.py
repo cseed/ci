@@ -53,6 +53,12 @@ class PRS(object):
             for y in x.values()
         ]
 
+    def exists(self, source, target):
+        assert isinstance(source, FQSHA), source
+        assert isinstance(target, FQSHA), target
+        pr = self._get(source.ref, target.ref)
+        return pr and pr.source.sha == source.sha and pr.target.sha == target.sha
+
     def live_targets(self):
         return self.target_source_pr.keys()
 
@@ -112,13 +118,13 @@ class PRS(object):
 
     def pr_push(self, gh_pr):
         assert isinstance(gh_pr, GitHubPR), gh_pr
-        pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
+        pr = self._get(gh_pr.source.ref, gh_pr.target_ref)
         if pr is None:
             log.warning(f'found new PR {gh_pr}')
             pr = gh_pr.to_PR(start_build=True)
         else:
             pr = pr.update_from_github_pr(gh_pr)
-        self._set(gh_pr.source.ref, gh_pr.target.ref, pr)
+        self._set(gh_pr.source.ref, gh_pr.target_ref, pr)
 
     def forget_target(self, target):
         assert isinstance(target, FQRef), f'{type(target)} {target}'
@@ -127,24 +133,20 @@ class PRS(object):
             x = self.source_target_pr[source]
             del x[target]
 
-    def forget(self, source, target=None):
-        if target is not None:
-            assert isinstance(source, FQRef)
-            assert isinstance(target, FQRef)
-            self._pop(source, target)
-        else:
-            pr = source
-            assert isinstance(pr, GitHubPR) or isinstance(pr, PR)
-            self._pop(pr.source.ref, pr.target.ref)
+    def forget(self, source, target):
+        assert isinstance(source, FQRef)
+        assert isinstance(target, FQRef)
+        self._pop(source, target)
 
     def review(self, gh_pr, state):
+        assert isinstance(gh_pr, GitHubPR), gh_pr
         assert state in ['pending', 'approved', 'changes_requested']
-        pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
+        pr = self._get(gh_pr.source.ref, gh_pr.target_ref)
         if pr is None:
             log.warning(f'found new PR during review update {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
-                  gh_pr.target.ref,
+                  gh_pr.target_ref,
                   pr.update_from_github_review_state(state))
 
     def build_finished(self, source, target, job):
@@ -163,31 +165,31 @@ class PRS(object):
         self.heal_target(target.ref)
 
     def refresh_from_job(self,
-                         source_ref,
-                         target_ref,
-                         source_sha,
-                         target_sha,
+                         source,
+                         target,
                          job):
         assert isinstance(job, Job), job
-        pr = self._get(source_ref, target_ref)
+        assert isinstance(source, FQSHA), source
+        assert isinstance(target, FQSHA), target
+        pr = self._get(source.ref, target.ref)
         if pr is None:
             log.warning(
                 f'ignoring job {job.id} for unknown source and target'
             )
             return
-        if pr.source.sha == source_sha and pr.target.sha == target_sha:
-            self._set(source_ref, target_ref, pr.refresh_from_batch_job(job))
-        else:
-            log.info(f'ignoring job {job.id} for unknown SHAs')
+        assert source.sha == pr.source.sha, f'{source} {pr}'
+        assert target.sha == pr.target.sha, f'{target} {pr}'
+        self._set(source.ref, target.ref, pr.refresh_from_batch_job(job))
 
     def refresh_from_github_build_status(self, gh_pr, status):
-        pr = self._get(gh_pr.source.ref, gh_pr.target.ref)
+        assert isinstance(gh_pr, GitHubPR), gh_pr
+        pr = self._get(gh_pr.source.ref, gh_pr.target_ref)
         if pr is None:
             log.warning(
                 f'found new PR during GitHub build status update {gh_pr}')
             pr = gh_pr.to_PR()
         self._set(gh_pr.source.ref,
-                  gh_pr.target.ref,
+                  gh_pr.target_ref,
                   pr.update_from_github_status(status))
 
     def build(self, source, target):
@@ -218,5 +220,5 @@ class PRS(object):
                 f'failure to merge {pr} due to {status_code} {gh_response}, '
                 f'removing PR, github state refresh will recover and retest '
                 f'if necessary')
-            self.forget(pr)
+            self.forget(pr.source.ref, pr.target.ref)
         # FIXME: eagerly update statuses for all PRs targeting this branch

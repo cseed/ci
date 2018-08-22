@@ -114,7 +114,10 @@ class TestCI(unittest.TestCase):
     DELAY_IN_SECONDS = 5
     MAX_POLLS = 10
 
-    def poll_github_until_merged(self, pr_number):
+    def poll_github_until_merged(self,
+                                 pr_number,
+                                 delay_in_seconds=DELAY_IN_SECONDS,
+                                 max_polls=MAX_POLLS):
         _, status_code = get_repo(
             'hail-is/ci-test',
             f'pulls/{pr_number}/merge',
@@ -122,7 +125,10 @@ class TestCI(unittest.TestCase):
             status_code=[204, 404],
             json_response=False,
             token=oauth_tokens['user1'])
-        while status_code != 204:
+        polls = 0
+        while status_code != 204 and polls < max_polls:
+            time.sleep(delay_in_seconds)
+            polls = polls + 1
             _, status_code = get_repo(
                 'hail-is/ci-test',
                 f'pulls/{pr_number}/merge',
@@ -476,7 +482,6 @@ class TestCI(unittest.TestCase):
                         },
                         "number": str(pr_number[SLOW_BRANCH_NAME])
                     })
-                second_slow_job_id = pr[SLOW_BRANCH_NAME].build.job.id
 
                 pr[SLOW_BRANCH_NAME] = self.poll_until_finished_pr(
                     SLOW_BRANCH_NAME)
@@ -505,9 +510,8 @@ class TestCI(unittest.TestCase):
                         },
                         "review": "pending",
                         "build": {
-                            "type": "Building",
-                            "target_sha": second_target_sha,
-                            "job_id": second_slow_job_id
+                            "type": "Deployable",
+                            "target_sha": second_target_sha
                         },
                         "number": str(pr_number[SLOW_BRANCH_NAME])
                     })
@@ -547,7 +551,7 @@ class TestCI(unittest.TestCase):
                      'rev-parse',
                      BRANCH_NAME],
                     stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
-                target_sha = run(
+                run(
                     ['git',
                      'rev-parse',
                      'master'],
@@ -577,44 +581,7 @@ class TestCI(unittest.TestCase):
                     status_code=200,
                     token=oauth_tokens['user1'])
                 time.sleep(7)
-                pr = self.poll_until_deployed(BRANCH_NAME)
-                assertDictHasKVs(
-                    pr.to_json(),
-                    {
-                        "target": {
-                            "ref": {
-                                "repo": {
-                                    "owner": "hail-is",
-                                    "name": "ci-test"
-                                },
-                                "name": "master"
-                            },
-                            "sha": target_sha
-                        },
-                        "source": {
-                            "ref": {
-                                "repo": {
-                                    "owner": "hail-is",
-                                    "name": "ci-test"
-                                },
-                                "name": BRANCH_NAME
-                            },
-                            "sha": source_sha
-                        },
-                        "review": "approved",
-                        "build": {
-                            "type": Match.any('Deployed'),
-                            "target_sha": target_sha
-                        },
-                        "number": pr_number
-                    })
-                get_repo(
-                    'hail-is/ci-test',
-                    f'pulls/{pr_number}/merge',
-                    # 204 NO CONTENT means merged, 404 means not merged
-                    status_code=204,
-                    json_response=False,
-                    token=oauth_tokens['user1'])
+                self.poll_github_until_merged(pr_number)
             finally:
                 call(['git', 'push', 'origin', ':' + BRANCH_NAME])
                 if pr_number is not None:

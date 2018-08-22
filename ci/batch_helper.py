@@ -1,4 +1,5 @@
 import requests
+from ci_logging import log
 
 
 def try_to_cancel_job(job):

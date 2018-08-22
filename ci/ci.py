@@ -68,12 +68,14 @@ def github_pull_request():
     assert 'action' in d, d
     assert 'pull_request' in d, d
     action = d['action']
-    gh_pr = GitHubPR.from_gh_json(d['pull_request'])
     if action in ('opened', 'synchronize'):
+        target_sha = FQSHA.from_gh_json(d['pull_request']['base']).sha
+        gh_pr = GitHubPR.from_gh_json(d['pull_request'], target_sha)
         prs.pr_push(gh_pr)
     elif action == 'closed':
+        gh_pr = GitHubPR.from_gh_json(d['pull_request'])
         log.info(f'forgetting closed pr {gh_pr}')
-        prs.forget(gh_pr)
+        prs.forget(gh_pr.source.ref, gh_pr.target_ref)
     else:
         log.info(f'ignoring pull_request with action {action}')
     return '', 200
@@ -93,13 +95,13 @@ def github_pull_request_review():
             prs.review(
                 gh_pr,
                 review_status(
-                    get_reviews(gh_pr.target.ref.repo,
+                    get_reviews(gh_pr.target_ref.repo,
                                 gh_pr.number)))
     elif action == 'dismissed':
         # FIXME: track all reviewers, then we don't need to talk to github
         prs.review(
             gh_pr,
-            review_status(get_reviews(gh_pr.target.ref.repo,
+            review_status(get_reviews(gh_pr.target_ref.repo,
                                       gh_pr.number)))
     else:
         log.info(f'ignoring pull_request_review with action {action}')
@@ -120,32 +122,37 @@ def ci_build_done():
 @app.route('/refresh_batch_state', methods=['POST'])
 def refresh_batch_state():
     jobs = batch_client.list_jobs()
+    jobs = [
+        job for job in jobs
+        if job.attributes.get('type', None) == BUILD_JOB_TYPE
+    ]
+    jobs = [
+        (FQSHA.from_json(json.loads(job.attributes['source'])),
+         FQSHA.from_json(json.loads(job.attributes['target'])),
+         job)
+        for job in jobs
+    ]
+    jobs = [(s, t, j) for (s, t, j) in jobs if prs.exists(s, t)]
     latest_jobs = {}
-    for job in jobs:
-        attributes = job.attributes
-        t = attributes.get('type', None)
-        if t and t == BUILD_JOB_TYPE:
-            target = FQSHA.from_json(json.loads(attributes['target']))
-            if target.ref.repo in watched_repos:
-                source = FQSHA.from_json(json.loads(attributes['source']))
-                key = (source.ref, target.ref)
-                _, _, job2 = latest_jobs.get(key, (None, None, None))
-                if job2 is None:
-                    latest_jobs[key] = (source.sha, target.sha, job)
-                else:
-                    if job_ordering(job, job2) > 0:
-                        log.info(
-                            f'cancelling {job2.id}, preferring {job.id}'
-                        )
-                        try_to_cancel_job(job2)
-                        latest_jobs[key] = (source.sha, target.sha, job)
-                    else:
-                        log.info(
-                            f'cancelling {job.id}, preferring {job2.id}'
-                        )
-                        try_to_cancel_job(job)
-    for ((source_ref, target_ref), (source_sha, target_sha, job)) in latest_jobs.items():
-        prs.refresh_from_job(source_ref, target_ref, source_sha, target_sha, job)
+    for (source, target, job) in jobs:
+        key = (source, target)
+        job2 = latest_jobs.get(key, None)
+        if job2 is None:
+            latest_jobs[key] = job
+        else:
+            if job_ordering(job, job2) > 0:
+                log.info(
+                    f'cancelling {job2.id}, preferring {job.id}'
+                )
+                try_to_cancel_job(job2)
+                latest_jobs[key] = job
+            else:
+                log.info(
+                    f'cancelling {job.id}, preferring {job2.id}'
+                )
+                try_to_cancel_job(job)
+    for ((source, target), job) in latest_jobs.items():
+        prs.refresh_from_job(source, target, job)
     return '', 200
 
 
@@ -166,7 +173,7 @@ def refresh_github_state():
             pulls_by_target = collections.defaultdict(list)
             for pull in pulls:
                 gh_pr = GitHubPR.from_gh_json(pull)
-                pulls_by_target[gh_pr.target.ref].append(gh_pr)
+                pulls_by_target[gh_pr.target_ref].append(gh_pr)
             refresh_pulls(pulls_by_target)
             refresh_reviews(pulls_by_target)
             # FIXME: I can't fit build state json in the status description
@@ -197,7 +204,7 @@ def refresh_reviews(pulls_by_target):
     for (_, pulls) in pulls_by_target.items():
         for gh_pr in pulls:
             reviews = get_repo(
-                gh_pr.target.ref.repo.qname,
+                gh_pr.target_ref.repo.qname,
                 'pulls/' + gh_pr.number + '/reviews',
                 status_code=200)
             state = overall_review_state(reviews)['state']
@@ -208,7 +215,7 @@ def refresh_statuses(pulls_by_target):
     for pulls in pulls_by_target.values():
         for gh_pr in pulls:
             statuses = get_repo(
-                gh_pr.target.ref.repo.qname,
+                gh_pr.target_ref.repo.qname,
                 'commits/' + gh_pr.source.sha + '/statuses',
                 status_code=200)
             prs.refresh_from_github_build_status(
