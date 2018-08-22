@@ -138,7 +138,7 @@ def verb_github(verb,
         headers = {}
     if 'Authorization' in headers:
         raise ValueError('Header already has Authorization? ' + str(headers))
-    headers['Authorization'] = 'token ' + oauth_token
+    headers['Authorization'] = 'token ' + token
     full_url = f'{GITHUB_API_URL}{url}'
     if verb == 'get':
         r = requests.get(full_url, headers=headers, timeout=5)
