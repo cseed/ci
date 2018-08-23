@@ -80,7 +80,7 @@ class PRS(object):
         ready_to_merge = self.ready_to_merge(target)
         if len(ready_to_merge) != 0:
             pr = ready_to_merge[-1]
-            self.deploy(pr)
+            self.merge(pr)
         else:
             self.build_next(target)
 
@@ -200,7 +200,7 @@ class PRS(object):
             raise ValueError(f'no such pr {source} {target}')
         self._set(source, target, pr.build_it())
 
-    def deploy(self, pr):
+    def merge(self, pr):
         assert isinstance(pr, PR)
         log.info(f'merging {pr}')
         (gh_response, status_code) = put_repo(

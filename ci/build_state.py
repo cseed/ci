@@ -1,8 +1,8 @@
-from batch.client import *
-from batch_helper import *
+from batch.client import Job
+from batch_helper import try_to_cancel_job
 from ci_logging import log
-from constants import *
-from real_constants import *
+from constants import batch_client
+from real_constants import CONTEXT
 import json
 import re
 
@@ -34,12 +34,10 @@ def build_state_from_gh_json(d):
 
 def build_state_from_json(d):
     t = d['type']
-    if t == 'Deployed':
-        return Deployed(d['job_id'], d['merged_sha'], d['target_sha'])
-    elif t == 'Deploying':
-        return Deploying(d['job_id'], d['merged_sha'], d['target_sha'])
-    elif t == 'Deployable':
-        return Deployable(d['merged_sha'], d['target_sha'])
+    if t == 'Merged':
+        return Merged(d['target_sha'])
+    elif t == 'Mergeable':
+        return Mergeable(d['target_sha'])
     elif t == 'Failure':
         return Failure(d['exit_code'], d['image'], d['target_sha'])
     elif t == 'NoMergeSHA':
@@ -56,23 +54,19 @@ def build_state_from_json(d):
         return Unknown()
 
 
-class Deployed(object):
-    def __init__(self, job_id, merged_sha, target_sha):
-        self.job_id = job_id
-        self.merged_sha = merged_sha
+class Merged(object):
+    def __init__(self, target_sha):
         self.target_sha = target_sha
 
     def transition(self, other):
         raise ValueError(f'bad transition {self} to {other}')
 
     def __str__(self):
-        return f'deployed'
+        return f'merged'
 
     def to_json(self):
         return {
-            'type': 'Deployed',
-            'job_id': self.job_id,
-            'merged_sha': self.merged_sha,
+            'type': 'Merged',
             'target_sha': self.target_sha
         }
 
@@ -80,66 +74,21 @@ class Deployed(object):
         return 'success'
 
     def __eq__(self, other):
-        return (isinstance(other,
-                           Deployed) and self.job_id == other.job_id
-                and self.merged_sha == other.merged_sha
-                and self.target_sha == other.target_sha)
+        return (isinstance(other, Merged) and
+                self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
 
 
-class Deploying(object):
-    def __init__(self, job_id, merged_sha, target_sha):
-        self.job_id = job_id
-        self.merged_sha = merged_sha
+class Mergeable(object):
+    def __init__(self, target_sha):
         self.target_sha = target_sha
 
-    def deployed(self):
-        return Deployed(self.job_id, self.merged_sha, self.target_sha)
-
     def transition(self, other):
-        if isinstance(other, Deployed):
-            return other
-        else:
-            raise ValueError(f'bad transition {self} to {other}')
-
-    def __str__(self):
-        return f'deploying'
-
-    def to_json(self):
-        return {
-            'type': 'Deploying',
-            'job_id': self.job_id,
-            'merged_sha': self.merged_sha,
-            'target_sha': self.target_sha
-        }
-
-    def gh_state(self):
-        return 'success'
-
-    def __eq__(self, other):
-        return (isinstance(other,
-                           Deploying) and self.job_id == other.job_id
-                and self.merged_sha == other.merged_sha
-                and self.target_sha == other.target_sha)
-
-    def __ne__(self, other):
-        return not self == other
-
-
-class Deployable(object):
-    def __init__(self, merged_sha, target_sha):
-        self.merged_sha = merged_sha
-        self.target_sha = target_sha
-
-    def deploy(self, job_id):
-        return Deploying(job_id, self.merged_sha, self.target_sha)
-
-    def transition(self, other):
-        if not isinstance(other, Deploying):
+        if not isinstance(other, Merged):
             log.warning(
-                f'usually deployable should go to Deploying, but going to {other}'
+                f'usually Mergeable should go to Merged, but going to {other}'
             )
         return other
 
@@ -148,8 +97,7 @@ class Deployable(object):
 
     def to_json(self):
         return {
-            'type': 'Deployable',
-            'merged_sha': self.merged_sha,
+            'type': 'Mergeable',
             'target_sha': self.target_sha
         }
 
@@ -157,9 +105,8 @@ class Deployable(object):
         return 'success'
 
     def __eq__(self, other):
-        return (isinstance(other,
-                           Deployable) and self.merged_sha == other.merged_sha
-                and self.target_sha == other.target_sha)
+        return (isinstance(other, Mergeable) and
+                self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
@@ -192,10 +139,10 @@ class Failure(object):
         return 'failure'
 
     def __eq__(self, other):
-        return (isinstance(other,
-                           Failure) and self.exit_code == other.exit_code
-                and self.image == other.image
-                and self.target_sha == other.target_sha)
+        return (isinstance(other, Failure) and
+                self.exit_code == other.exit_code and
+                self.image == other.image and
+                self.target_sha == other.target_sha)
 
     def __ne__(self, other):
         return not self == other
@@ -242,7 +189,7 @@ class Building(object):
         self.target_sha = target_sha
 
     def success(self, merged_sha):
-        return Deployable(merged_sha, self.target_sha)
+        return Mergeable(merged_sha, self.target_sha)
 
     def failure(self, exit_code):
         return Failure(exit_code, self.image, self.target_sha)
@@ -251,14 +198,12 @@ class Building(object):
         return NoMergeSHA(exit_code, self.target_sha)
 
     def transition(self, other):
-        if (isinstance(other, Deploying) or isinstance(other, Deployed)):
+        if isinstance(other, Merged):
             raise ValueError(f'bad transition {self} to {other}')
 
-        if (not isinstance(other,
-                           Failure) and not isinstance(other,
-                                                       Deployable)
-                and not isinstance(other,
-                                   NoMergeSHA)):
+        if (not isinstance(other, Failure) and
+            not isinstance(other, Mergeable) and
+            not isinstance(other, NoMergeSHA)):
             log.info(f'cancelling unneeded job {self.job.id} {self} {other}')
             try_to_cancel_job(self.job)
         return other

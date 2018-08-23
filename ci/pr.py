@@ -1,15 +1,16 @@
 from batch.client import Job
 from build_state import \
-    Failure, Deployable, Unknown, NoImage, Building, Buildable, Deployed, \
+    Failure, Mergeable, Unknown, NoImage, Building, Buildable, Merged, \
     build_state_from_json
 from ci_logging import log
-from constants import *
+from constants import PR_BUILD_SCRIPT, SELF_HOSTNAME, batch_client
 from git_state import FQSHA, FQRef
 from http_helper import get_repo, post_repo, BadStatus
-from real_constants import *
+from real_constants import CONTEXT, BUILD_JOB_TYPE, VERSION, GCS_BUCKET
 from sentinel import Sentinel
 from subprocess import run, CalledProcessError
 import json
+import os
 
 
 def review_status(reviews):
@@ -164,7 +165,6 @@ class GitHubPR(object):
                         FQSHA.from_gh_json(d['base']).ref,
                         target_sha)
 
-
     def __str__(self):
         return json.dumps(self.to_json())
 
@@ -232,7 +232,7 @@ class PR(object):
     def _maybe_new_shas(self, new_source=None, new_target=None):
         assert new_source is not None or new_target is not None
         if new_source and self.source != new_source:
-            assert not self.is_deployed()
+            assert not self.is_merged()
             if new_target and self.target != new_target:
                 log.info(
                     f'new source and target sha {new_target} {new_source} {self}'
@@ -243,12 +243,12 @@ class PR(object):
                 return self._new_source(new_source)
         else:
             if new_target and self.target != new_target:
-                if not self.is_deployed():
+                if self.is_merged():
+                    log.info(f'ignoring new target sha for merged PR {self}')
+                    return self
+                else:
                     log.info(f'new target sha {new_target} {self}')
                     return self._new_target(new_target)
-                else:
-                    log.info(f'ignoring new target sha for deployed PR {self}')
-                    return self
             else:
                 return self
 
@@ -291,7 +291,7 @@ class PR(object):
 
     # FIXME: this should be a verb
     def merged(self):
-        return self._new_build(Deployed(-1, 'NO SHAS YET!!', self.target.sha))
+        return self._new_build(Merged(self.target.sha))
 
     def notify_github(self, build):
         log.info(f'notifying github of {build} {self}')
@@ -300,7 +300,7 @@ class PR(object):
             'description': str(build),
             'context': CONTEXT
         }
-        if isinstance(build, Failure) or isinstance(build, Deployable):
+        if isinstance(build, Failure) or isinstance(build, Mergeable):
             json['target_url'] = \
                 f'https://storage.googleapis.com/{GCS_BUCKET}/{self.source.sha}/{self.target.sha}/index.html'
         try:
@@ -352,13 +352,9 @@ class PR(object):
             'title': self.title
         }
 
-    # deprecated
     def is_mergeable(self):
-        return self.is_deployable()
-
-    def is_deployable(self):
-        return (isinstance(self.build,
-                           Deployable) and self.review == 'approved')
+        return (isinstance(self.build, Mergeable) and
+                self.review == 'approved')
 
     def is_approved(self):
         return self.review == 'approved'
@@ -369,8 +365,8 @@ class PR(object):
     def is_pending_build(self):
         return isinstance(self.build, Buildable)
 
-    def is_deployed(self):
-        return isinstance(self.build, Deployed)
+    def is_merged(self):
+        return isinstance(self.build, Merged)
 
     def update_from_github_push(self, push):
         assert isinstance(push, FQSHA)
@@ -399,7 +395,7 @@ class PR(object):
     def update_from_github_review_state(self, review):
         if self.review != review:
             log.info(f'review state changing from {self.review} to {review} {self}')
-            # FIXME: start deploy flow if approved and success
+            # FIXME: start merge flow if approved and success
             return self.copy(review=review)
         else:
             return self
@@ -464,7 +460,7 @@ class PR(object):
             return self
         if exit_code == 0:
             log.info(f'job finished success {job.id} {job.attributes} {self}')
-            return self._new_build(Deployable('NO SHAS YET', self.target.sha))
+            return self._new_build(Mergeable(self.target.sha))
         else:
             log.info(f'job finished failure {job.id} {job.attributes} {self}')
             return self._new_build(

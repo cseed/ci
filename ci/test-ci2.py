@@ -137,27 +137,6 @@ class TestCI(unittest.TestCase):
                 json_response=False,
                 token=oauth_tokens['user1'])
 
-
-    def poll_until_deployable(self,
-                              source_ref,
-                              delay_in_seconds=DELAY_IN_SECONDS,
-                              max_polls=MAX_POLLS):
-        return self.poll_pr(
-            source_ref,
-            lambda pr: not pr.is_deployable(),
-            delay_in_seconds=delay_in_seconds,
-            max_polls=max_polls)
-
-    def poll_until_deployed(self,
-                            source_ref,
-                            delay_in_seconds=DELAY_IN_SECONDS,
-                            max_polls=MAX_POLLS):
-        return self.poll_pr(
-            source_ref,
-            lambda pr: not pr.is_deployed(),
-            delay_in_seconds=delay_in_seconds,
-            max_polls=max_polls)
-
     def poll_until_finished_pr(self,
                                source_ref,
                                delay_in_seconds=DELAY_IN_SECONDS,
@@ -175,16 +154,6 @@ class TestCI(unittest.TestCase):
         return self.poll_pr(
             source_ref,
             lambda pr: pr.is_pending_build(),
-            delay_in_seconds=delay_in_seconds,
-            max_polls=max_polls)
-
-    def poll_until_deployed_pr(self,
-                               source_ref,
-                               delay_in_seconds=DELAY_IN_SECONDS,
-                               max_polls=MAX_POLLS):
-        return self.poll_pr(
-            source_ref,
-            lambda pr: not pr.is_deployed(),
             delay_in_seconds=delay_in_seconds,
             max_polls=max_polls)
 
@@ -299,7 +268,7 @@ class TestCI(unittest.TestCase):
                         },
                         "review": "pending",
                         "build": {
-                            "type": "Deployable",
+                            "type": "Mergeable",
                             "target_sha": target_sha
                         },
                         "number": pr_number
@@ -510,7 +479,7 @@ class TestCI(unittest.TestCase):
                         },
                         "review": "pending",
                         "build": {
-                            "type": "Deployable",
+                            "type": "Mergeable",
                             "target_sha": second_target_sha
                         },
                         "number": str(pr_number[SLOW_BRANCH_NAME])
