@@ -134,7 +134,6 @@ class PRS(object):
         assert isinstance(target, FQSHA)
         assert target.ref in self.deployable_refs, \
             f'{target.ref} {[ref.short_str() for ref in self.deployable_refs]}'
-        log.info(f'deploying {target.short_str()}')
         old_job = self.deploy_jobs.get(target, None)
         if old_job is not None:
             log.info(f'cancelling old deploy job {old_job.id} for {target}')
@@ -181,6 +180,7 @@ class PRS(object):
                         'readOnly': True
                     }
                 }])
+            log.info(f'deploying {target.short_str()} in job {job.id}')
             deploy_status = Deploying(job)
         except Exception as e:
             log.exception(f'could not start deploy job due to {e}')
@@ -260,7 +260,7 @@ class PRS(object):
         assert isinstance(target, FQSHA), target
         state = job.cached_status()['state']
         log.info(
-            f'refreshing from deploy job {job.id} {state} {job.attributes}'
+            f'refreshing from deploy job {job.id} {state}'
         )
         if state == 'Complete':
             self.deploy_build_finished(target, job)

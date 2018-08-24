@@ -118,7 +118,7 @@ class TestCI(unittest.TestCase):
                                  pr_number,
                                  delay_in_seconds=DELAY_IN_SECONDS,
                                  max_polls=MAX_POLLS):
-        _, status_code = get_repo(
+        r, status_code = get_repo(
             'hail-is/ci-test',
             f'pulls/{pr_number}/merge',
             # 204 NO CONTENT means merged, 404 means not merged
@@ -222,16 +222,8 @@ class TestCI(unittest.TestCase):
                 call(['git', 'checkout', '-b', BRANCH_NAME])
                 call(['git', 'commit', '--allow-empty', '-m', 'foo'])
                 call(['git', 'push', 'origin', BRANCH_NAME])
-                source_sha = run(
-                    ['git',
-                     'rev-parse',
-                     BRANCH_NAME],
-                    stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
-                target_sha = run(
-                    ['git',
-                     'rev-parse',
-                     'master'],
-                    stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
+                source_sha = self.rev_parse(BRANCH_NAME)
+                target_sha = self.rev_parse('master')
                 data = post_repo(
                     'hail-is/ci-test',
                     'pulls',
@@ -309,11 +301,7 @@ class TestCI(unittest.TestCase):
 
     def push(self, ref):
         call(['git', 'push', 'origin', ref])
-        return run(
-            ['git',
-             'rev-parse',
-             ref],
-            stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
+        return self.rev_parse(ref)
 
     def approve(self, pr_number, sha):
         return post_repo(
@@ -417,6 +405,10 @@ class TestCI(unittest.TestCase):
                 call(['git', 'fetch', 'origin'])
                 second_target_sha = self.rev_parse('origin/master')
 
+                deploy_artifact = run(['gsutil', 'cat', f'gs://hail-ci-test/{second_target_sha}'], stdout=subprocess.PIPE)
+                deploy_artifact = deploy_artifact.stdout.decode('utf-8').strip()
+                assert f'commit {second_target_sha}' in deploy_artifact
+
                 time.sleep(5)  # allow github push notification to be sent
 
                 pr[SLOW_BRANCH_NAME] = self.poll_until_finished_pr(
@@ -482,16 +474,7 @@ class TestCI(unittest.TestCase):
                 call(['git', 'checkout', '-b', BRANCH_NAME])
                 call(['git', 'commit', '--allow-empty', '-m', 'foo'])
                 call(['git', 'push', 'origin', BRANCH_NAME])
-                source_sha = run(
-                    ['git',
-                     'rev-parse',
-                     BRANCH_NAME],
-                    stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
-                run(
-                    ['git',
-                     'rev-parse',
-                     'master'],
-                    stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
+                source_sha = self.rev_parse(BRANCH_NAME)
                 gh_pr = post_repo(
                     'hail-is/ci-test',
                     'pulls',
@@ -518,6 +501,13 @@ class TestCI(unittest.TestCase):
                     token=oauth_tokens['user1'])
                 time.sleep(7)
                 self.poll_github_until_merged(pr_number)
+
+                call(['git', 'fetch', 'origin'])
+                merged_sha = self.rev_parse('origin/master')
+
+                deploy_artifact = run(['gsutil', 'cat', f'gs://hail-ci-test/{merged_sha}'], stdout=subprocess.PIPE)
+                deploy_artifact = deploy_artifact.stdout.decode('utf-8').strip()
+                assert f'commit {merged_sha}' in deploy_artifact
             finally:
                 call(['git', 'push', 'origin', ':' + BRANCH_NAME])
                 if pr_number is not None:
