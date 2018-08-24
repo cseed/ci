@@ -7,7 +7,7 @@ function cleanup {
 }
 trap cleanup EXIT
 
-export WATCHED_REPOS='["hail-is/ci-test"]'
+export WATCHED_REPOS='["hail-is/ci-test:master"]'
 
 source activate hail-ci
 python ci/ci.py & echo $! > ci.pid

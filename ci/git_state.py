@@ -1,4 +1,4 @@
-from real_constants import *
+from real_constants import GITHUB_CLONE_URL
 import json
 
 
@@ -9,7 +9,7 @@ class Repo(object):
         self.owner = owner
         self.name = name
         self.url = f'{GITHUB_CLONE_URL}{owner}/{name}.git'
-        self.qname = f'{owner}/{name}'
+        self.qname = self.short_str()
 
     def __eq__(self, other):
         return self.owner == other.owner and self.name == other.name
@@ -22,6 +22,15 @@ class Repo(object):
 
     def __str__(self):
         return json.dumps(self.to_json())
+
+    @staticmethod
+    def from_short_str(s):
+        pieces = s.split("/")
+        assert len(pieces) == 2, f'{pieces} {s}'
+        return Repo(pieces[0], pieces[1])
+
+    def short_str(self):
+        return f'{self.owner}/{self.name}'
 
     @staticmethod
     def from_json(d):
@@ -62,6 +71,15 @@ class FQRef(object):
         return json.dumps(self.to_json())
 
     @staticmethod
+    def from_short_str(s):
+        pieces = s.split(":")
+        assert len(pieces) == 2, f'{pieces} {s}'
+        return FQRef(Repo.from_short_str(pieces[0]), pieces[1])
+
+    def short_str(self):
+        return f'{self.repo.short_str()}:{self.name}'
+
+    @staticmethod
     def from_json(d):
         assert isinstance(d, dict), f'{type(d)} {d}'
         assert 'repo' in d, d
@@ -87,6 +105,17 @@ class FQSHA(object):
 
     def __hash__(self):
         return hash((self.ref, self.sha))
+
+    @staticmethod
+    def from_short_str(s):
+        pieces = s.split(":")
+        assert len(pieces) == 3, f'{pieces} {s}'
+        return FQSHA(FQRef(Repo.from_short_str(pieces[0]),
+                           pieces[1]),
+                     pieces[2])
+
+    def short_str(self):
+        return f'{self.ref.short_str()}:{self.sha}'
 
     @staticmethod
     def from_gh_json(d):

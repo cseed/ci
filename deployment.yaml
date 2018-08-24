@@ -20,8 +20,8 @@ spec:
               value: http://hail-ci
             - name: BATCH_SERVER_URL
               value: http://batch
-            - name: WATCHED_REPOS
-              value: '["hail-is/hail"]'
+            - name: DEPLOYABLE_REFS
+              value: '["hail-is/hail:master", "hail-is/hail:0.1"]'
           ports:
             - containerPort: 5000
           volumeMounts:

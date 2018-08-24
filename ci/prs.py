@@ -1,15 +1,26 @@
 from batch.client import Job
 from ci_logging import log
-from git_state import FQRef, FQSHA
+from constants import \
+    PR_DEPLOY_SCRIPT, \
+    batch_client, \
+    SELF_HOSTNAME
+from deploy_state import \
+    DeployOtherFailure, \
+    Deploying, \
+    DeployJobFailure
+from git_state import FQRef, FQSHA, Repo
 from http_helper import put_repo
-from pr import PR, GitHubPR
+from pr import PR, GitHubPR, get_image_for_target
+from real_constants import VERSION, DEPLOY_JOB_TYPE
 import json
 
 
 class PRS(object):
-    def __init__(self):
+    def __init__(self, deployable_refs):
         self.target_source_pr = {}
         self.source_target_pr = {}
+        self.deployable_refs = deployable_refs
+        self.deploy_jobs = {}
 
     def _set(self, source, target, pr):
         assert isinstance(source, FQRef), source
@@ -48,10 +59,20 @@ class PRS(object):
         return json.dumps(self.to_json())
 
     def to_json(self):
-        return [
-            y.to_json() for x in self.target_source_pr.values()
-            for y in x.values()
-        ]
+        return {
+            'deployable_refs': [ref.to_json() for ref in self.deployable_refs],
+            'deploy_jobs': [
+                (target.to_json(), status.to_json())
+                for target, status in self.deploy_jobs.items()
+            ],
+            'prs': [
+                y.to_json() for x in self.target_source_pr.values()
+                for y in x.values()
+            ]
+        }
+
+    def watched_repos(self):
+        return [ref.repo for ref in self.deployable_refs]
 
     def exists(self, source, target):
         assert isinstance(source, FQSHA), source
@@ -104,8 +125,72 @@ class PRS(object):
         for pr in to_build:
             self._set(pr.source.ref, pr.target.ref, pr.build_it())
 
+    _deploy_service_accounts = {
+        Repo('hail-is', 'hail'): f'ci-deploy-{VERSION}--hail-is-hail',
+        Repo('hail-is', 'ci-test'): f'ci-deploy-{VERSION}--hail-is-ci-test'
+    }
+
+    def deploy(self, target):
+        assert isinstance(target, FQSHA)
+        assert target.ref in self.deployable_refs, \
+            f'{target.ref} {[ref.short_str() for ref in self.deployable_refs]}'
+        log.info(f'deploying {target.short_str()}')
+        old_job = self.deploy_jobs.get(target, None)
+        if old_job is not None:
+            log.info(f'cancelling old deploy job {old_job.id} for {target}')
+            old_job.cancel()
+        try:
+            img = get_image_for_target(target.ref)
+            attributes = {
+                'target': json.dumps(target.to_json()),
+                'image': img,
+                'type': DEPLOY_JOB_TYPE
+            }
+            svc_acct = PRS._deploy_service_accounts[target.ref.repo]
+            job = batch_client.create_job(
+                img,
+                command=['/bin/bash', '-c', PR_DEPLOY_SCRIPT],
+                env={
+                    'DEPLOY_REPO_URL': target.ref.repo.url,
+                    'DEPLOY_BRANCH': target.ref.name,
+                    'DEPLOY_SHA': target.sha,
+                    'GCLOUD_ACCT_NAME': svc_acct
+                },
+                resources={'requests': {
+                    'cpu': '3.7',
+                    'memory': '4G'
+                }},
+                tolerations=[{
+                    'key': 'preemptible',
+                    'value': 'true'
+                }],
+                callback=SELF_HOSTNAME + '/deploy_build_done',
+                attributes=attributes,
+                volumes=[{
+                    'volume': {
+                        'name': f'{svc_acct}-service-account-key',
+                        'secret': {
+                            'optional': False,
+                            'secretName':
+                            f'{svc_acct}-service-account-key'
+                        }
+                    },
+                    'volume_mount': {
+                        'mountPath': '/secrets',
+                        'name': f'{svc_acct}-service-account-key',
+                        'readOnly': True
+                    }
+                }])
+            deploy_status = Deploying(job)
+        except Exception as e:
+            log.exception(f'could not start deploy job due to {e}')
+            deploy_status = DeployOtherFailure(str(e))
+        self.deploy_jobs[target] = deploy_status
+
     def push(self, new_target):
         assert isinstance(new_target, FQSHA), new_target
+        if new_target.ref in self.deployable_refs:
+            self.deploy(new_target)
         prs = self._get(target=new_target.ref).values()
         if len(prs) == 0:
             log.info(f'no PRs for target {new_target}')
@@ -149,7 +234,46 @@ class PRS(object):
                   gh_pr.target_ref,
                   pr.update_from_github_review_state(state))
 
-    def build_finished(self, source, target, job):
+    def deploy_build_finished(self, target, job):
+        assert isinstance(job, Job), f'{job.id} {job.attributes}'
+        deploy_status = self.deploy_jobs.get(target, None)
+        if deploy_status is None:
+            log.error(
+                f'notified of finished build {job.id} {job.attributes} for '
+                f'unneeded sha {target.short_str()}')
+            return
+        if not isinstance(deploy_status, Deploying):
+            ValueError(
+                f'was in {deploy_status} but saw a completed deploy job '
+                f'{job.id} {job.attributes} for {target}')
+        assert job.cached_status()['state'] == 'Complete'
+        exit_code = job.cached_status()['exit_code']
+        if exit_code != 0:
+            log.error(f'deploy job {job.id} failed for {target.short_str()}')
+            self.deploy_jobs[target] = DeployJobFailure(exit_code)
+        else:
+            del self.deploy_jobs[target]
+            log.info(f'deploy job {job.id} succeeded for {target.short_str()}')
+
+    def refresh_from_deploy_job(self, target, job):
+        assert isinstance(job, Job), job
+        assert isinstance(target, FQSHA), target
+        state = job.cached_status()['state']
+        log.info(
+            f'refreshing from deploy job {job.id} {state} {job.attributes}'
+        )
+        if state == 'Complete':
+            self.deploy_build_finished(target, job)
+        elif state == 'Cancelled':
+            log.info(f'refreshing from cancelled deploy job {job.id} {job.attributes}')
+            self.deploy_jobs[target] = DeployOtherFailure(f'job {job.id} cancelled {job.attributes}')
+        else:
+            assert state == 'Created', f'{state} {job.id} {job.attributes}'
+            assert isinstance(self.deploy_jobs[target], Deploying), \
+                f'{target} {job.id} {job.attributes} {self.deploy_jobs[target]}'
+            self.deploy_jobs[target] = Deploying(job)
+
+    def ci_build_finished(self, source, target, job):
         assert isinstance(job, Job), job
         pr = self._get(source.ref, target.ref)
         if pr is None:
@@ -164,10 +288,7 @@ class PRS(object):
         # eagerly heal because a finished job might mean new work to do
         self.heal_target(target.ref)
 
-    def refresh_from_job(self,
-                         source,
-                         target,
-                         job):
+    def refresh_from_ci_job(self, source, target, job):
         assert isinstance(job, Job), job
         assert isinstance(source, FQSHA), source
         assert isinstance(target, FQSHA), target

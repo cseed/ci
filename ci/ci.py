@@ -4,7 +4,7 @@ from build_state import build_state_from_gh_json
 from ci_logging import log
 from constants import \
     batch_client, \
-    INITIAL_WATCHED_REPOS, \
+    DEPLOYABLE_REFS, \
     REFRESH_INTERVAL_IN_SECONDS
 from flask import Flask, request, jsonify
 from git_state import Repo, FQRef, FQSHA
@@ -16,18 +16,14 @@ from http_helper import BadStatus
 from http_helper import get_repo
 from pr import review_status, GitHubPR
 from prs import PRS
-from real_constants import BUILD_JOB_TYPE, GCS_BUCKET
+from real_constants import BUILD_JOB_TYPE, GCS_BUCKET, DEPLOY_JOB_TYPE
 import collections
 import json
 import requests
 import threading
 import time
 
-prs = PRS()
-watched_repos = {
-    Repo(x[0], x[1])
-    for x in (x.split('/') for x in INITIAL_WATCHED_REPOS)
-}
+prs = PRS(DEPLOYABLE_REFS)
 
 app = Flask(__name__)
 
@@ -40,10 +36,7 @@ def handle_invalid_usage(error):
 
 @app.route('/status')
 def status():
-    return jsonify({
-        'watched_repos': [x.to_json() for x in watched_repos],
-        'prs': prs.to_json()
-    })
+    return jsonify(prs.to_json())
 
 
 @app.route('/push', methods=['POST'])
@@ -115,17 +108,37 @@ def ci_build_done():
     source = FQSHA.from_json(json.loads(attributes['source']))
     target = FQSHA.from_json(json.loads(attributes['target']))
     job = Job(batch_client, d['id'], attributes=attributes, _status=d)
-    receive_job(source, target, job)
+    receive_ci_job(source, target, job)
+    return '', 200
+
+
+@app.route('/deploy_build_done', methods=['POST'])
+def deploy_build_done():
+    d = request.json
+    attributes = d['attributes']
+    target = FQSHA.from_json(json.loads(attributes['target']))
+    job = Job(batch_client, d['id'], attributes=attributes, _status=d)
+    receive_deploy_job(target, job)
     return '', 200
 
 
 @app.route('/refresh_batch_state', methods=['POST'])
 def refresh_batch_state():
     jobs = batch_client.list_jobs()
-    jobs = [
+    build_jobs = [
         job for job in jobs
         if job.attributes.get('type', None) == BUILD_JOB_TYPE
     ]
+    refresh_ci_build_jobs(build_jobs)
+    deploy_jobs = [
+        job for job in jobs
+        if job.attributes.get('type', None) == DEPLOY_JOB_TYPE
+    ]
+    refresh_deploy_jobs(deploy_jobs)
+    return '', 200
+
+
+def refresh_ci_build_jobs(jobs):
     jobs = [
         (FQSHA.from_json(json.loads(job.attributes['source'])),
          FQSHA.from_json(json.loads(job.attributes['target'])),
@@ -152,8 +165,39 @@ def refresh_batch_state():
                 )
                 try_to_cancel_job(job)
     for ((source, target), job) in latest_jobs.items():
-        prs.refresh_from_job(source, target, job)
-    return '', 200
+        prs.refresh_from_ci_job(source, target, job)
+
+
+def refresh_deploy_jobs(jobs):
+    jobs = [
+        (FQSHA.from_json(json.loads(job.attributes['target'])),
+         job)
+        for job in jobs
+    ]
+    jobs = [
+        (target, job)
+        for (target, job) in jobs
+        if target in prs.deploy_jobs
+    ]
+    latest_jobs = {}
+    for (target, job) in jobs:
+        job2 = latest_jobs.get(target, None)
+        if job2 is None:
+            latest_jobs[target] = job
+        else:
+            if job_ordering(job, job2) > 0:
+                log.info(
+                    f'cancelling {job2.id}, preferring {job.id}'
+                )
+                try_to_cancel_job(job2)
+                latest_jobs[target] = job
+            else:
+                log.info(
+                    f'cancelling {job.id}, preferring {job2.id}'
+                )
+                try_to_cancel_job(job)
+    for (target, job) in latest_jobs.items():
+        prs.refresh_from_deploy_job(target, job)
 
 
 @app.route('/force_retest', methods=['POST'])
@@ -165,9 +209,20 @@ def force_retest():
     return '', 200
 
 
+@app.route('/force_redeploy', methods=['POST'])
+def force_redeploy():
+    d = request.json
+    target = FQRef.from_json(d['target'])
+    if target in prs.deployable_refs:
+        prs.deploy(target)
+        return '', 200
+    else:
+        return f'{target.short_str()} not in {[ref.short_str() for ref in prs.deployable_refs]}', 400
+
+
 @app.route('/refresh_github_state', methods=['POST'])
 def refresh_github_state():
-    for target_repo in watched_repos:
+    for target_repo in prs.watched_repos():
         try:
             pulls = open_pulls(target_repo)
             pulls_by_target = collections.defaultdict(list)
@@ -232,15 +287,26 @@ def heal():
 ###############################################################################
 
 
-def receive_job(source, target, job):
+def receive_ci_job(source, target, job):
     upload_public_gs_file_from_string(GCS_BUCKET,
-                                      f'{source.sha}/{target.sha}/job-log',
+                                      f'ci/{source.sha}/{target.sha}/job-log',
                                       job.cached_status()['log'])
     upload_public_gs_file_from_filename(
         GCS_BUCKET,
-        f'{source.sha}/{target.sha}/index.html',
+        f'ci/{source.sha}/{target.sha}/index.html',
         'index.html')
-    prs.build_finished(source, target, job)
+    prs.ci_build_finished(source, target, job)
+
+
+def receive_deploy_job(target, job):
+    upload_public_gs_file_from_string(GCS_BUCKET,
+                                      f'deploy/{target.sha}/job-log',
+                                      job.cached_status()['log'])
+    upload_public_gs_file_from_filename(
+        GCS_BUCKET,
+        f'deploy/{target.sha}/index.html',
+        'deploy-index.html')
+    prs.deploy_build_finished(target, job)
 
 
 def get_reviews(repo, pr_number):

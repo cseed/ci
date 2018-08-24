@@ -97,6 +97,17 @@ def determine_buildability(source, target):
         return NoImage()
 
 
+def get_image_for_target(target):
+    import requests
+    assert isinstance(target, FQRef), target
+    url = f'https://github.com/{target.repo.qname}/raw/{target.name}/hail-ci-build-image'
+    r = requests.get(url, timeout=5)
+    if r.status_code != 200:
+        raise BadStatus(f'could not get raw hail-ci-build-image for {target.short_str()}',
+                        r.status_code)
+    return r.text.strip()
+
+
 def maybe_get_image(source, target):
     assert isinstance(source, FQSHA)
     assert isinstance(target, FQSHA)
@@ -302,7 +313,7 @@ class PR(object):
         }
         if isinstance(build, Failure) or isinstance(build, Mergeable):
             json['target_url'] = \
-                f'https://storage.googleapis.com/{GCS_BUCKET}/{self.source.sha}/{self.target.sha}/index.html'
+                f'https://storage.googleapis.com/{GCS_BUCKET}/ci/{self.source.sha}/{self.target.sha}/index.html'
         try:
             post_repo(
                 self.target.ref.repo.qname,
@@ -418,7 +429,7 @@ class PR(object):
     def refresh_from_batch_job(self, job):
         state = job.cached_status()['state']
         log.info(
-            f'refreshing from batch job {job.id} {state} {job.attributes} {self}'
+            f'refreshing from ci job {job.id} {state} {job.attributes} {self}'
         )
         if state == 'Complete':
             return self.update_from_completed_batch_job(job)

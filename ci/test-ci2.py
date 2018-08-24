@@ -105,7 +105,7 @@ class TestCI(unittest.TestCase):
     def get_pr(self, source_ref):
         status = ci_get('/status', status_code=200)
         assert 'prs' in status
-        assert 'watched_repos' in status
+        assert 'deployable_refs' in status
         all_prs = [PR.from_json(x) for x in status['prs']]
         prs = [pr for pr in all_prs if pr.source.ref.name == source_ref]
         assert len(prs) == 1, [str(x.source.ref) for x in all_prs]
@@ -136,6 +136,8 @@ class TestCI(unittest.TestCase):
                 status_code=[204, 404],
                 json_response=False,
                 token=oauth_tokens['user1'])
+        assert polls < max_polls, f'{polls} {max_polls}'
+        assert status_code == 204
 
     def poll_until_finished_pr(self,
                                source_ref,
@@ -192,7 +194,7 @@ class TestCI(unittest.TestCase):
             time.sleep(delay_in_seconds)
             status = ci_get('/status', status_code=200)
             assert 'prs' in status
-            assert 'watched_repos' in status
+            assert 'deployable_refs' in status
             all_prs = [PR.from_json(x) for x in status['prs']]
             prs = [pr for pr in all_prs if pr.source.ref.name == source_ref]
             assert len(prs) <= 1, [str(x.source.ref) for x in all_prs]
@@ -206,12 +208,12 @@ class TestCI(unittest.TestCase):
             pr_number = None
             try:
                 status = ci_get('/status', status_code=200)
-                self.assertIn('watched_repos', status)
-                self.assertEqual(status['watched_repos'],
-                                 [{
+                self.assertIn('deployable_refs', status)
+                self.assertEqual(status['deployable_refs'],
+                                 [{'repo': {
                                      'name': 'ci-test',
-                                     'owner': 'hail-is'
-                                 }])
+                                     'owner': 'hail-is'},
+                                   'name': 'master'}])
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
@@ -326,9 +328,7 @@ class TestCI(unittest.TestCase):
 
     def rev_parse(self, ref):
         return run(
-            ['git',
-             'rev-parse',
-             ref],
+            ['git', 'rev-parse', ref],
             stdout=subprocess.PIPE).stdout.decode('utf-8').strip()
 
     def test_push_while_building(self):
@@ -341,11 +341,12 @@ class TestCI(unittest.TestCase):
             pr = {}
             try:
                 status = ci_get('/status', status_code=200)
-                assert 'watched_repos' in status
-                assert status['watched_repos'] == [{
-                    'name': 'ci-test',
-                    'owner': 'hail-is'
-                }]
+                assert 'deployable_refs' in status
+                assert status['deployable_refs'] == [{
+                    'repo': {
+                        'name': 'ci-test',
+                        'owner': 'hail-is'},
+                    'name': 'master'}]
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
@@ -418,40 +419,6 @@ class TestCI(unittest.TestCase):
 
                 time.sleep(5)  # allow github push notification to be sent
 
-                # slow branch should be running again with the new target sha
-                pr[SLOW_BRANCH_NAME] = self.get_pr(SLOW_BRANCH_NAME)
-                assertDictHasKVs(
-                    pr[SLOW_BRANCH_NAME].to_json(),
-                    {
-                        "target": {
-                            "ref": {
-                                "repo": {
-                                    "owner": "hail-is",
-                                    "name": "ci-test"
-                                },
-                                "name": "master"
-                            },
-                            "sha": second_target_sha
-                        },
-                        "source": {
-                            "ref": {
-                                "repo": {
-                                    "owner": "hail-is",
-                                    "name": "ci-test"
-                                },
-                                "name": SLOW_BRANCH_NAME
-                            },
-                            "sha": source_sha[SLOW_BRANCH_NAME]
-                        },
-                        "review": "pending",
-                        "build": {
-                            "type": "Building",
-                            "target_sha": second_target_sha,
-                            "job_id": Match.notEqual(first_slow_job_id)
-                        },
-                        "number": str(pr_number[SLOW_BRANCH_NAME])
-                    })
-
                 pr[SLOW_BRANCH_NAME] = self.poll_until_finished_pr(
                     SLOW_BRANCH_NAME)
                 assertDictHasKVs(
@@ -501,12 +468,12 @@ class TestCI(unittest.TestCase):
             pr_number = None
             try:
                 status = ci_get('/status', status_code=200)
-                self.assertIn('watched_repos', status)
-                self.assertEqual(status['watched_repos'],
-                                 [{
-                                     'name': 'ci-test',
-                                     'owner': 'hail-is'
-                                 }])
+                self.assertIn('deployable_refs', status)
+                assert status['deployable_refs'] == [{
+                    'repo': {
+                        'name': 'ci-test',
+                        'owner': 'hail-is'},
+                    'name': 'master'}]
                 os.chdir(d)
                 call(['git', 'clone', 'git@github.com:hail-is/ci-test.git'])
                 os.chdir('ci-test')
